@@ -1,0 +1,36 @@
+[limits]
+token_budget = 16000
+max_batches_per_bucket = 6
+soft_batches_per_bucket = 6
+absolute_max_batches_per_bucket = 30
+max_items_per_batch = 60
+max_scene_items_per_batch = 20
+max_style_window_items_per_batch = 10
+chapter_support_limit = 4
+plot_node_support_limit = 4
+min_bucket_confidence = 0.18
+
+[targets]
+min_scene_in_any_batch_ratio = 0.70
+min_style_window_in_any_batch_ratio = 0.90
+min_batches_per_core_bucket = 1
+scene_token_quota = 10000
+style_window_token_quota = 6000
+scene_per_style_window_target = 4
+
+[weights]
+axis_novelty = 0.30
+evidence_density = 0.20
+entity_novelty = 0.05
+chapter_continuity_bonus = 0.32
+entity_overlap_bonus = 0.22
+plot_node_overlap_bonus = 0.12
+conflict_intensity = 0.15
+institution_density = 0.10
+voice_novelty = 0.10
+capacity_efficiency_bonus = 0.22
+style_window_scene_guard_penalty = 0.18
+redundancy_penalty = 0.20
+duplicate_item_penalty = 0.35
+repeat_chapter_penalty = 0.04
+token_pressure_penalty = 0.12

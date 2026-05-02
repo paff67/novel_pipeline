@@ -1,0 +1,73 @@
+[models]
+fact_model = "gpt-5.4"
+style_model = "gpt-5.4"
+style_bible_model = "gpt-5.4"
+env_profile = "gpt"
+api_route = "responses"
+reasoning_effort = "xhigh"
+fact_temperature = 0.1
+style_temperature = 0.1
+style_bible_temperature = 0.2
+fact_max_output_tokens = 2048
+style_max_output_tokens = 4096
+style_bible_max_output_tokens = 4096
+timeout_seconds = 180
+retry_count = 2
+response_format = "json_object"
+max_requests_per_minute = 0.0
+
+[scene_split]
+min_chars = 500
+target_chars = 900
+max_chars = 1400
+
+[style_windows]
+window_size = 2
+stride = 2
+
+[paths]
+prompt_dir = "prompts"
+
+[style_bible_reduce]
+mode = "hierarchical"
+local_reduce_concurrency = 1
+critical_buckets = ["resource_pressure", "institutional_pipeline", "dark_humor"]
+max_failed_bucket_count = 1
+max_failed_bucket_ratio = 0.15
+supporting_evidence_soft_cap = 18
+supporting_evidence_hard_cap = 20
+
+[embedding]
+enabled = true
+model = "Qwen/Qwen3-Embedding-8B"
+env_profile = "silicon flaw"
+max_batch_size = 16
+retrieval_top_k = 12
+dedupe_threshold = 0.92
+slot_match_threshold = 0.80
+
+[stability]
+stream = true
+user_agent = "novel-pipeline/0.1"
+connect_timeout_seconds = 15
+read_timeout_seconds = 180
+write_timeout_seconds = 30
+pool_timeout_seconds = 30
+base_backoff_seconds = 2.0
+max_backoff_seconds = 20.0
+cooldown_after_failures = 3
+cooldown_seconds = 45.0
+compact_json = true
+omit_empty_normalization_applied = true
+enable_json_repair = true
+repair_max_output_tokens = 2048
+facts_two_pass_enabled = true
+facts_two_pass_scene_char_threshold = 1200
+facts_two_pass_request_char_threshold = 3800
+facts_two_pass_on_failure = true
+facts_two_pass_include_primary_context = true
+raw_response_mode = "errors_only"
+enable_local_request_cache = true
+local_request_cache_dirname = "_request_cache"
+local_request_cache_version = "v1"
+record_request_metrics = true

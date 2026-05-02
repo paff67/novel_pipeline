@@ -1,0 +1,398 @@
+[meta]
+version = "project-domain-vocabulary-v1"
+
+[route_cues]
+style = [
+  "文风",
+  "写法",
+  "语气",
+  "旁白",
+  "视角",
+  "节奏",
+  "描写",
+  "对白",
+  "台词",
+  "声音",
+  "voice",
+  "style",
+  "route",
+  "routing",
+  "negative",
+  "避免",
+  "怎么写",
+]
+world = [
+  "设定",
+  "世界",
+  "实体",
+  "关系",
+  "规则",
+  "门派",
+  "宗门",
+  "人物",
+  "角色",
+  "地点",
+  "事件",
+  "资格",
+  "配额",
+  "graph",
+  "world",
+  "fact",
+  "谁",
+  "哪里",
+  "是什么",
+]
+
+[generic_patterns]
+terms = [
+  "抽象压抑感",
+  "空泛压力",
+  "泛制度批判",
+  "泛商业逻辑",
+  "泛校园氛围",
+  "泛考试主题",
+  "纯情绪总结",
+  "抽象苦难",
+  "主题式总论",
+]
+
+[safe_cues]
+terms = [
+  "触发条件",
+  "执行约束",
+  "审批链",
+  "放行条件",
+  "资格门槛",
+  "回款周期",
+  "成本卡点",
+  "制度节点",
+  "检索目标",
+  "返回重点",
+]
+
+[anti_stuffing]
+terms = [
+  "斜杠式双语词表",
+  "keyword stuffing",
+  "关键词包",
+  "词库堆叠",
+  "主题标签堆砌",
+  "泛化概括",
+  "模糊路由",
+  "参考相关设定",
+  "调用对应信息",
+]
+
+[mechanism_prototypes]
+routing_hints = [
+  "当问题询问具体制度节点时，路由到对应 worldbook 条目，并返回审批链、资格门槛或责任节点。",
+  "当问题涉及回款、放行、审批、筛选或名额卡点时，优先返回触发条件与执行后果。",
+]
+rag_worthy = [
+  "把可反复复用的机构、流程、门槛、资源限制沉淀成稳定原子设定。",
+  "优先沉淀资格条件、流程步骤、配额规则、赔偿规则和资源约束。",
+]
+worldbook_worthy = [
+  "把长期稳定、可跨章节查询的制度常识、实体关系和约束写成可独立入库的原子规则。",
+]
+negative_rules = [
+  "禁止把制度惩罚、欠款压力、羞辱触发器写成抽象情绪。",
+  "改为先写清卡点、门槛、流程、代价，再写角色动作如何被推迟、拒绝或改道。",
+]
+constraint_rules = [
+  "规则优先写成 trigger -> constraint 的动作句，而不是栏目标题或主题词。",
+]
+scalar_rules = [
+  "标量路径只输出 canonical enum token，不夹带解释性长句。",
+]
+
+[signals.institution]
+terms = [
+  "学校",
+  "学院",
+  "制度",
+  "规则",
+  "流程",
+  "审批",
+  "面试",
+  "录取",
+  "通知",
+  "标准",
+  "政策",
+  "资格",
+  "分班",
+  "排名",
+  "班级",
+]
+
+[signals.resource_pressure]
+terms = [
+  "债务",
+  "借贷",
+  "贷款",
+  "欠款",
+  "欠费",
+  "余额",
+  "费用",
+  "学费",
+  "补课",
+  "转账",
+  "租金",
+  "兼职",
+  "赚钱",
+  "赔偿",
+  "还款",
+]
+
+[signals.body]
+terms = [
+  "身体",
+  "器官",
+  "手术",
+  "绝育",
+  "改造",
+  "变性",
+  "激素",
+  "植入",
+  "灵根",
+  "肉身",
+  "肌肉",
+  "伤口",
+]
+
+[signals.dark_humor]
+terms = [
+  "黑色幽默",
+  "荒诞",
+  "一本正经",
+  "离谱",
+  "反差",
+  "吐槽",
+  "冷笑",
+  "讽刺",
+]
+
+[signals.sales_pitch]
+terms = [
+  "套餐",
+  "推广",
+  "广告",
+  "报名",
+  "课程",
+  "服务",
+  "推荐",
+  "优惠",
+  "VIP",
+  "购买",
+  "充值",
+  "代言",
+]
+
+[signals.contract]
+terms = [
+  "合同",
+  "协议",
+  "签约",
+  "条款",
+  "违约",
+  "授权",
+  "结算",
+  "报价",
+  "佣金",
+  "赔偿",
+]
+
+[signals.conflict]
+terms = [
+  "战斗",
+  "比赛",
+  "冲突",
+  "羞辱",
+  "威胁",
+  "压价",
+  "淘汰",
+  "筛选",
+  "围猎",
+  "竞争",
+]
+
+[signals.voice]
+terms = [
+  "吐槽",
+  "讽刺",
+  "自嘲",
+  "反问",
+  "一本正经",
+  "冷静",
+  "嘴硬",
+]
+
+[signals.relationship]
+terms = [
+  "母亲",
+  "家庭",
+  "同学",
+  "老师",
+  "朋友",
+  "队友",
+  "搭伙",
+  "上级",
+  "家里",
+]
+
+[signals.labor]
+terms = [
+  "打工",
+  "兼职",
+  "工时",
+  "绩效",
+  "工作",
+  "接活",
+  "加班",
+  "赚钱",
+  "补课",
+]
+
+[signals.cooperation]
+terms = [
+  "互助",
+  "协作",
+  "搭伙",
+  "分工",
+  "共享",
+  "一起",
+  "合作",
+]
+
+[signals.shame]
+terms = [
+  "羞耻",
+  "丢脸",
+  "体面",
+  "低等",
+  "看不起",
+  "排挤",
+  "嘲笑",
+]
+
+[signals.family]
+terms = [
+  "母亲",
+  "家庭",
+  "家里",
+  "家产",
+  "照料",
+  "养家",
+  "转账",
+  "凑钱",
+]
+
+[axes.resource_pressure]
+cue = "资源压力主轴"
+canonical_description = "金钱、债务、回款和生存成本决定动作推进。"
+terms = ["债务", "贷款", "现金流", "手术费", "没钱", "穷", "补习费", "借贷", "成本", "收益", "余额", "花钱"]
+
+[axes.education_filter]
+cue = "筛选门槛主轴"
+canonical_description = "学校、考试、排名和资格门槛将角色分层。"
+terms = ["学校", "排名", "分数", "面试", "示范班", "升学", "教育", "门槛", "考试", "资格", "班级"]
+
+[axes.body_modification]
+cue = "身体资产化主轴"
+canonical_description = "身体被改造、计价、替换或优化，成为制度的一部分。"
+terms = ["身体", "改造", "绝育", "变性", "器官", "肉身", "植入", "手术", "法骸", "灵根", "肌肉", "骨"]
+
+[axes.institutional_absurdity]
+cue = "制度荒诞主轴"
+canonical_description = "荒诞规则通过冷静的流程话语被正常化。"
+terms = ["制度", "规则", "流程", "通知", "标准", "政策", "条件", "合同", "审批", "管理", "规定"]
+
+[axes.dark_humor]
+cue = "黑色幽默主轴"
+canonical_description = "一本正经的叙述和语气错位制造黑色幽默。"
+terms = ["黑色幽默", "冷面", "吐槽", "讽刺", "荒诞", "反差", "笑点", "冷笑", "一本正经"]
+
+[axes.family_labor]
+cue = "家庭劳动主轴"
+canonical_description = "家庭付出和家务式劳动补贴主角的生存。"
+terms = ["家庭", "母亲", "加班", "转账", "资源交换", "兼职", "体面", "凑钱", "还债", "家里"]
+
+[axes.labor_logic]
+cue = "劳动逻辑主轴"
+canonical_description = "修行和成长被组织成打工、工时和绩效逻辑。"
+terms = ["劳动", "打工", "工时", "时薪", "绩效", "加班", "赚钱", "接活", "补课", "工作", "兼职"]
+
+[axes.identity_shame]
+cue = "身份羞耻主轴"
+canonical_description = "羞辱、掉价和身份暴露直接塑造角色行为。"
+terms = ["羞耻", "丢脸", "体面", "地位", "外地人", "掉价", "贬低", "看穿", "排名低", "穷学生"]
+
+[axes.production_commonwealth]
+cue = "共同生产主轴"
+canonical_description = "互助、搭伙和共享劳动形成脆弱共同体。"
+terms = ["共同训练", "共享资源", "互相带活", "生产共同体", "一起赚钱", "互助", "协作", "搭伙", "分工", "共用"]
+
+[axes.asset_repricing]
+cue = "资产重估主轴"
+canonical_description = "人物、合同和机会被反复估值、压价和重定价。"
+terms = ["估值", "围猎", "招揽", "打压", "重新定价", "赔偿", "补偿", "报价", "压价", "抬价"]
+
+[buckets.resource_pressure]
+cue = "资源压力桶"
+canonical_description = "债务、现金和生存成本持续卡住主角动作。"
+terms = ["债务", "贷款", "现金流", "余额", "花钱", "手术费", "补习费", "借贷"]
+
+[buckets.exam_screening]
+cue = "考试筛选桶"
+canonical_description = "排名、考试和学校流程承担制度筛选功能。"
+terms = ["面试", "考试", "示范班", "排名", "升学", "筛选", "考场", "门槛"]
+
+[buckets.body_assetization]
+cue = "身体资产化桶"
+canonical_description = "身体被当成可替换、可计价、可优化的资产。"
+terms = ["身体", "器官", "手术", "绝育", "改造", "植入", "法骸", "灵根"]
+
+[buckets.institutional_pipeline]
+cue = "制度流水线桶"
+canonical_description = "行政流程语言把制度性冷酷写成标准动作。"
+terms = ["制度", "流程", "标准", "通知", "政策", "审批", "管理", "规定"]
+
+[buckets.dark_humor]
+cue = "黑色幽默桶"
+canonical_description = "冷面讽刺和语气错位构成主要笑点机制。"
+terms = ["黑色幽默", "吐槽", "冷面", "反差", "荒诞", "讽刺", "笑点"]
+
+[buckets.family_survival]
+cue = "家庭生存桶"
+canonical_description = "家庭牺牲和家务式劳动维持系统运转。"
+terms = ["母亲", "家庭", "转账", "凑钱", "加班", "兼职", "家里", "还债"]
+
+[buckets.gray_labor]
+cue = "灰色劳动桶"
+canonical_description = "副业、地下劳动和计件式求生策略占主导。"
+terms = ["打工", "兼职", "接活", "补课", "工时", "时薪", "赚钱", "工作"]
+
+[buckets.identity_shame]
+cue = "身份羞耻桶"
+canonical_description = "地位恐慌、羞辱和身份暴露成为主要压力源。"
+terms = ["体面", "羞耻", "丢脸", "看不起", "外地", "贬低", "排名低"]
+
+[buckets.collective_production]
+cue = "共同生产桶"
+canonical_description = "共享劳动、共同训练和互助式生产构成关系基础。"
+terms = ["互助", "协作", "共享资源", "搭伙", "一起赚钱", "共同训练", "分工"]
+
+[buckets.asset_repricing]
+cue = "资产重估桶"
+canonical_description = "合同、赔偿和机会围绕重定价持续波动。"
+terms = ["估值", "赔偿", "补偿", "报价", "压价", "抬价", "重新定价", "围猎"]
+
+[buckets.contract_sales]
+cue = "合同销售桶"
+canonical_description = "合同条款、销售话术和平台化招揽共同推进情节。"
+terms = ["合同", "协议", "签约", "条款", "销售", "广告", "推广", "套餐", "授权"]
+
+[buckets.commercialized_conflict]
+cue = "商业化冲突桶"
+canonical_description = "战斗和竞争被市场、赞助和成本逻辑重新编码。"
+terms = ["比赛", "战斗", "赞助", "广告", "市场", "赔偿", "直播", "商业"]

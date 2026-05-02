@@ -1,0 +1,41 @@
+[selection]
+axis_selection_min_score = 0.22
+axis_selection_fallback_score = 0.12
+axis_selection_secondary_score = 0.18
+style_window_high_precision_bonus = 0.04
+evidence_density_bonus_threshold = 0.35
+evidence_density_bonus = 0.04
+
+[dark_humor]
+voice_feature_multiplier = 0.60
+conflict_support_multiplier = 0.80
+min_voice_novelty = 0.16
+min_signal = 0.34
+min_secondary_signal = 0.18
+keyword_hit_threshold = 2
+keyword_voice_novelty = 0.22
+style_window_min_signal = 0.26
+style_window_min_evidence_density = 0.32
+bucket_min_axis_score = 0.30
+bucket_min_voice_novelty = 0.30
+bucket_min_secondary_signal = 0.20
+bucket_keyword_hit_threshold = 2
+bucket_min_confidence = 0.30
+
+[institutional_absurdity]
+min_institution_density = 0.18
+secondary_signal_threshold = 0.16
+style_window_keyword_hit_threshold = 2
+style_window_min_evidence_density = 0.32
+
+[institutional_pipeline]
+bucket_min_axis_score = 0.24
+bucket_min_institution_density = 0.22
+bucket_min_secondary_signal = 0.20
+bucket_keyword_hit_threshold = 2
+bucket_min_confidence = 0.30
+
+[asset_repricing]
+min_pricing_signal = 0.18
+min_secondary_signal = 0.16
+keyword_hit_threshold = 2

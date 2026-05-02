@@ -1,0 +1,26 @@
+[models]
+fact_model = "gemini-2.5-pro"
+style_model = "gemini-3-pro-preview"
+style_bible_model = ""
+fact_temperature = 0.1
+style_temperature = 0.3
+style_bible_temperature = 0.2
+fact_max_output_tokens = 8192
+style_max_output_tokens = 8192
+style_bible_max_output_tokens = 4096
+timeout_seconds = 120
+retry_count = 3
+response_format = "json_schema"
+max_requests_per_minute = 2.0
+
+[scene_split]
+min_chars = 500
+target_chars = 900
+max_chars = 1400
+
+[style_windows]
+window_size = 5
+stride = 3
+
+[paths]
+prompt_dir = "prompts"

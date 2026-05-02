@@ -1,0 +1,31 @@
+[thresholds]
+max_judge_score_drop = 5.0
+warn_judge_score_drop = 2.5
+max_eval_score_drop = 5.0
+warn_eval_score_drop = 2.5
+max_fail_case_increase = 1
+warn_fail_case_increase = 0
+max_case_score_drop = 12.0
+warn_case_score_drop = 6.0
+max_critical_dimension_drop = 8.0
+warn_critical_dimension_drop = 4.0
+min_candidate_pass_case_ratio = 0.45
+min_candidate_critical_dimension_score = 0.0
+severity_warn = 1
+severity_fail = 3
+
+[hard_gates]
+require_candidate_eval_quality_gate = true
+require_candidate_judge_quality_gate = true
+
+[critical_dimensions]
+ids = [
+  "mechanism_specificity",
+  "evidence_faithfulness",
+  "trace_auditability",
+  "routing_executability",
+  "worldbook_exportability",
+  "rag_atomicity",
+  "prompt_preset_usability",
+  "anti_pattern_resistance",
+]

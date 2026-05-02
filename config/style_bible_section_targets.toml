@@ -1,0 +1,1151 @@
+﻿[repair]
+section_rules_config = "style_bible_eval_rules.toml"
+max_rounds = 2
+max_buckets_per_round = 8
+max_paths_per_bucket = 4
+
+[densify]
+enabled = true
+max_rounds = 2
+max_paths_per_round = 6
+retrieval_top_k = 12
+dedupe_threshold = 0.94
+slot_match_threshold = 0.72
+soft_slot_match_floor = 0.64
+max_gray_keep = 1
+
+[buckets.default]
+repair_priority = 100
+preferred_paths = [
+  "narrative_system.engine",
+  "expression_system.description_rules",
+  "expression_system.dialogue_rules",
+  "expression_system.characterization_rules",
+  "negative_rules",
+]
+scalar_paths = [
+  "narrative_system.perspective",
+  "narrative_system.distance",
+  "narrative_system.temporality",
+]
+prompt_hints = [
+  "Stay bucket-scoped and grounded; never add rows just to satisfy layout.",
+]
+
+[buckets.resource_pressure]
+repair_priority = 10
+preferred_paths = [
+  "narrative_system.engine",
+  "narrative_system.pacing_rules",
+  "narrative_system.plot_node_logic",
+  "expression_system.description_rules",
+  "expression_system.characterization_rules",
+  "expression_system.sensory_rules",
+  "aesthetics_system.pressure_axes",
+  "voice_contract.register_mix",
+  "character_arc_rules",
+  "negative_rules",
+]
+scalar_paths = [
+  "narrative_system.distance",
+  "narrative_system.temporality",
+  "voice_contract.inner_monologue_mode",
+]
+prompt_hints = [
+  "Prefer cost, repayment, eligibility, shortage, and deadline logic over abstract mood labels.",
+]
+
+[buckets.exam_screening]
+repair_priority = 30
+preferred_paths = [
+  "narrative_system.plot_node_logic",
+  "expression_system.description_rules",
+  "expression_system.dialogue_rules",
+  "expression_system.characterization_rules",
+  "aesthetics_system.core_axes",
+  "aesthetics_system.satire_targets",
+  "voice_contract.register_mix",
+  "worldbook_binding.worldbook_worthy",
+  "worldbook_binding.routing_hints",
+  "negative_rules",
+]
+scalar_paths = [
+  "narrative_system.perspective",
+  "narrative_system.distance",
+]
+prompt_hints = [
+  "Prefer ranking gates, notices, interviews, and admission filters over generic school-theme prose.",
+]
+
+[buckets.body_assetization]
+repair_priority = 35
+preferred_paths = [
+  "expression_system.description_rules",
+  "expression_system.characterization_rules",
+  "expression_system.sensory_rules",
+  "aesthetics_system.core_axes",
+  "aesthetics_system.pressure_axes",
+  "aesthetics_system.nonstandard_xianxia_rules",
+  "worldbook_binding.rag_worthy",
+  "worldbook_binding.worldbook_worthy",
+  "negative_rules",
+]
+scalar_paths = [
+  "narrative_system.distance",
+]
+prompt_hints = [
+  "Prefer bodily cost, billable modification, and replacement logic over abstract body-horror labels.",
+]
+
+[buckets.institutional_pipeline]
+repair_priority = 12
+preferred_paths = [
+  "narrative_system.engine",
+  "narrative_system.pacing_rules",
+  "narrative_system.plot_node_logic",
+  "expression_system.description_rules",
+  "expression_system.dialogue_rules",
+  "aesthetics_system.core_axes",
+  "aesthetics_system.satire_targets",
+  "voice_contract.register_mix",
+  "voice_contract.negative_pitfalls",
+  "worldbook_binding.worldbook_worthy",
+  "worldbook_binding.routing_hints",
+  "negative_rules",
+]
+scalar_paths = [
+  "narrative_system.perspective",
+  "narrative_system.temporality",
+  "voice_contract.narrator_voice",
+]
+prompt_hints = [
+  "Prefer calm procedural phrasing, notices, approvals, and workflow language over abstract institutional critique.",
+]
+
+[buckets.dark_humor]
+repair_priority = 14
+preferred_paths = [
+  "expression_system.dialogue_rules",
+  "aesthetics_system.humor_recipe",
+  "aesthetics_system.satire_targets",
+  "voice_contract.register_mix",
+  "voice_contract.negative_pitfalls",
+  "worldbook_binding.routing_hints",
+  "negative_rules",
+]
+scalar_paths = [
+  "voice_contract.narrator_voice",
+]
+prompt_hints = [
+  "Prefer deadpan delivery, tonal mismatch, and concrete punchline mechanics over a bare humor label.",
+]
+
+[buckets.family_survival]
+repair_priority = 22
+preferred_paths = [
+  "narrative_system.engine",
+  "expression_system.characterization_rules",
+  "expression_system.sensory_rules",
+  "aesthetics_system.pressure_axes",
+  "voice_contract.register_mix",
+  "character_arc_rules",
+  "negative_rules",
+]
+scalar_paths = [
+  "voice_contract.inner_monologue_mode",
+  "narrative_system.distance",
+]
+prompt_hints = [
+  "Prefer household sacrifice, remittance, and labor-exchange logic over generic family warmth or pain.",
+]
+
+[buckets.gray_labor]
+repair_priority = 18
+preferred_paths = [
+  "narrative_system.engine",
+  "narrative_system.pacing_rules",
+  "narrative_system.plot_node_logic",
+  "expression_system.characterization_rules",
+  "aesthetics_system.pressure_axes",
+  "voice_contract.register_mix",
+  "character_arc_rules",
+  "negative_rules",
+]
+scalar_paths = [
+  "narrative_system.distance",
+  "voice_contract.inner_monologue_mode",
+]
+prompt_hints = [
+  "Prefer shift logic, piece-rate work, and gray-market tactics over a generic labor theme.",
+]
+
+[buckets.identity_shame]
+repair_priority = 26
+preferred_paths = [
+  "expression_system.dialogue_rules",
+  "expression_system.characterization_rules",
+  "expression_system.sensory_rules",
+  "aesthetics_system.core_axes",
+  "voice_contract.register_mix",
+  "character_arc_rules",
+  "negative_rules",
+]
+scalar_paths = [
+  "voice_contract.inner_monologue_mode",
+  "narrative_system.distance",
+]
+prompt_hints = [
+  "Prefer humiliation triggers, status exposure, and face-saving behavior over abstract shame language.",
+]
+
+[buckets.collective_production]
+repair_priority = 40
+preferred_paths = [
+  "narrative_system.engine",
+  "narrative_system.plot_node_logic",
+  "expression_system.dialogue_rules",
+  "expression_system.characterization_rules",
+  "aesthetics_system.core_axes",
+  "aesthetics_system.pressure_axes",
+  "character_arc_rules",
+  "worldbook_binding.worldbook_worthy",
+]
+scalar_paths = [
+  "narrative_system.temporality",
+]
+prompt_hints = [
+  "Prefer coordination, co-production, and mutual-aid mechanics over generic teamwork slogans.",
+]
+
+[buckets.asset_repricing]
+repair_priority = 20
+preferred_paths = [
+  "narrative_system.engine",
+  "narrative_system.plot_node_logic",
+  "expression_system.description_rules",
+  "expression_system.dialogue_rules",
+  "aesthetics_system.pressure_axes",
+  "aesthetics_system.satire_targets",
+  "worldbook_binding.rag_worthy",
+  "worldbook_binding.worldbook_worthy",
+  "worldbook_binding.routing_hints",
+  "negative_rules",
+]
+scalar_paths = [
+  "narrative_system.temporality",
+]
+prompt_hints = [
+  "Prefer repricing, compensation, leverage, and predatory valuation mechanics over abstract market language.",
+]
+
+[buckets.contract_sales]
+repair_priority = 28
+preferred_paths = [
+  "expression_system.description_rules",
+  "expression_system.dialogue_rules",
+  "aesthetics_system.satire_targets",
+  "voice_contract.register_mix",
+  "worldbook_binding.rag_worthy",
+  "worldbook_binding.worldbook_worthy",
+  "worldbook_binding.routing_hints",
+  "negative_rules",
+]
+scalar_paths = [
+  "voice_contract.narrator_voice",
+]
+prompt_hints = [
+  "Prefer contract clauses, package language, and sales persuasion over generic commerce wording.",
+]
+
+[buckets.commercialized_conflict]
+repair_priority = 24
+preferred_paths = [
+  "narrative_system.engine",
+  "narrative_system.pacing_rules",
+  "narrative_system.plot_node_logic",
+  "expression_system.sensory_rules",
+  "aesthetics_system.pressure_axes",
+  "aesthetics_system.nonstandard_xianxia_rules",
+  "worldbook_binding.rag_worthy",
+  "worldbook_binding.routing_hints",
+  "negative_rules",
+]
+scalar_paths = [
+  "narrative_system.temporality",
+  "narrative_system.distance",
+]
+prompt_hints = [
+  "Prefer sponsorship, compensation, bodily cost, and market-framed combat logic over generic action intensity.",
+]
+
+[[path_targets]]
+path = "narrative_system.engine"
+target_count = 3
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "resource_pressure",
+  "institutional_pipeline",
+  "gray_labor",
+  "family_survival",
+  "asset_repricing",
+]
+downstream_shape = "Emit concrete trigger -> constraint rules that explain how action is gated."
+slot_match_threshold = 0.70
+soft_slot_match_floor = 0.62
+prompt_hints = [
+  "Prefer action engines driven by cost, procedure, screening, or repayment gates.",
+  "Do not collapse multiple engines into one generic pressure summary.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "cost_gate_engine"
+label = "Cost Gate Engine"
+cue = "成本先行驱动"
+canonical_description = "Action only moves after the bill, price, debt, or repayment pressure is surfaced."
+
+[[path_targets.slot_specs]]
+slot_id = "procedure_gate_engine"
+label = "Procedure Gate Engine"
+cue = "流程卡点驱动"
+canonical_description = "Action only moves after notices, forms, approvals, or workflow checkpoints are completed."
+
+[[path_targets.slot_specs]]
+slot_id = "screening_gate_engine"
+label = "Screening Gate Engine"
+cue = "门槛筛选驱动"
+canonical_description = "Action only moves after ranking, interview, score, or eligibility gates are cleared."
+
+[[path_targets]]
+path = "narrative_system.pacing_rules"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "resource_pressure",
+  "institutional_pipeline",
+  "gray_labor",
+  "commercialized_conflict",
+]
+downstream_shape = "Emit pacing rules that explain stop-start rhythm through gates, queues, and deadlines."
+slot_match_threshold = 0.70
+soft_slot_match_floor = 0.62
+prompt_hints = [
+  "Prefer queueing, deadline, waiting-room, and repayment-window pacing.",
+  "Each row should isolate one rhythm mechanic instead of summarizing the whole chapter.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "deadline_squeeze_pacing"
+label = "Deadline Squeeze Pacing"
+cue = "期限挤压节奏"
+canonical_description = "Scenes tighten when payment windows, application windows, or hard deadlines force short bursts of action."
+
+[[path_targets.slot_specs]]
+slot_id = "approval_delay_pacing"
+label = "Approval Delay Pacing"
+cue = "审批拖延节奏"
+canonical_description = "Scenes stall on approvals, signatures, notices, or formal review steps before restarting."
+
+[[path_targets.slot_specs]]
+slot_id = "repayment_countdown_pacing"
+label = "Repayment Countdown Pacing"
+cue = "回款倒逼节奏"
+canonical_description = "The beat accelerates or freezes depending on repayment settlement and cashflow countdowns."
+
+[[path_targets.slot_specs]]
+slot_id = "queue_stop_start_pacing"
+label = "Queue Stop Start Pacing"
+cue = "排队卡顿节奏"
+canonical_description = "The story advances in stop-start bursts through queues, checkpoints, and repeated waiting turns."
+
+[[path_targets]]
+path = "narrative_system.plot_node_logic"
+target_count = 3
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "resource_pressure",
+  "institutional_pipeline",
+  "exam_screening",
+  "asset_repricing",
+  "commercialized_conflict",
+]
+downstream_shape = "Emit turning-point logic that shows which gate flips the next plot node."
+slot_match_threshold = 0.70
+soft_slot_match_floor = 0.62
+prompt_hints = [
+  "Prefer checkpoint logic over abstract plot momentum.",
+  "Each row should identify one gate that flips the next node.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "approval_checkpoint_logic"
+label = "Approval Checkpoint Logic"
+cue = "审批节点翻转"
+canonical_description = "A notice, approval, or signature checkpoint flips the plot into the next node."
+
+[[path_targets.slot_specs]]
+slot_id = "screening_checkpoint_logic"
+label = "Screening Checkpoint Logic"
+cue = "筛选节点翻转"
+canonical_description = "A ranking, score, interview, or quota gate decides whether the next plot branch opens."
+
+[[path_targets.slot_specs]]
+slot_id = "repricing_turn_logic"
+label = "Repricing Turn Logic"
+cue = "重估议价翻转"
+canonical_description = "A repricing, compensation change, or cost recalculation flips the next story turn."
+
+[[path_targets]]
+path = "expression_system.description_rules"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "resource_pressure",
+  "body_assetization",
+  "institutional_pipeline",
+  "contract_sales",
+  "asset_repricing",
+]
+downstream_shape = "Emit description rules that make cost and procedure visible through concrete detail."
+slot_match_threshold = 0.70
+soft_slot_match_floor = 0.62
+prompt_hints = [
+  "Prefer bills, notices, package wording, and resource residue over poetic summary.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "cost_first_description"
+label = "Cost First Description"
+cue = "账单先行描写"
+canonical_description = "Description foregrounds price, debt, payment residue, or bill details before emotion."
+
+[[path_targets.slot_specs]]
+slot_id = "document_interface_description"
+label = "Document Interface Description"
+cue = "文书界面描写"
+canonical_description = "Description lingers on notices, forms, stamps, lines, or interface-like workflow objects."
+
+[[path_targets.slot_specs]]
+slot_id = "body_package_description"
+label = "Body Package Description"
+cue = "身体套餐描写"
+canonical_description = "Description treats surgery, replacement parts, organs, or bodily tradeoffs like priced packages."
+
+[[path_targets.slot_specs]]
+slot_id = "scarcity_texture_description"
+label = "Scarcity Texture Description"
+cue = "匮乏质感描写"
+canonical_description = "Description lands through shortage residue, worn tools, cramped spaces, or overused materials."
+
+[[path_targets]]
+path = "expression_system.dialogue_rules"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "dark_humor",
+  "institutional_pipeline",
+  "exam_screening",
+  "contract_sales",
+  "identity_shame",
+]
+downstream_shape = "Emit dialogue rules that make leverage, qualification, and procedure audible."
+slot_match_threshold = 0.70
+soft_slot_match_floor = 0.62
+prompt_hints = [
+  "Prefer terms of trade, qualification checks, and procedural replies over generic banter.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "deadpan_transaction_dialogue"
+label = "Deadpan Transaction Dialogue"
+cue = "冷面交易对话"
+canonical_description = "Dialogue keeps a flat tone while speaking in transaction, pricing, or package language."
+
+[[path_targets.slot_specs]]
+slot_id = "procedural_reply_dialogue"
+label = "Procedural Reply Dialogue"
+cue = "流程答复对话"
+canonical_description = "Dialogue answers through notices, conditions, workflow steps, or official wording."
+
+[[path_targets.slot_specs]]
+slot_id = "qualification_dialogue"
+label = "Qualification Dialogue"
+cue = "资格门槛对话"
+canonical_description = "Dialogue foregrounds ranking, scores, eligibility, interviews, or access thresholds."
+
+[[path_targets.slot_specs]]
+slot_id = "face_saving_dialogue"
+label = "Face Saving Dialogue"
+cue = "保全面子对话"
+canonical_description = "Dialogue shows characters circling around shame, exposure, or status loss with evasive phrasing."
+
+[[path_targets]]
+path = "expression_system.characterization_rules"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "resource_pressure",
+  "family_survival",
+  "gray_labor",
+  "identity_shame",
+  "body_assetization",
+]
+downstream_shape = "Emit characterization rules that show tradeoff logic through behavior."
+slot_match_threshold = 0.70
+soft_slot_match_floor = 0.62
+prompt_hints = [
+  "Prefer labor, shame, debt, and family tradeoff behavior over abstract personality labels.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "labor_calculus_characterization"
+label = "Labor Calculus Characterization"
+cue = "劳动算计塑形"
+canonical_description = "Characters are defined by constant calculation of labor, hours, rates, and output."
+
+[[path_targets.slot_specs]]
+slot_id = "cost_benefit_compromise_characterization"
+label = "Cost Benefit Compromise Characterization"
+cue = "代价权衡塑形"
+canonical_description = "Characters reveal themselves by accepting, delaying, or renegotiating painful tradeoffs."
+
+[[path_targets.slot_specs]]
+slot_id = "family_duty_characterization"
+label = "Family Duty Characterization"
+cue = "家庭义务塑形"
+canonical_description = "Characters act under remittance, household duty, or familial survival obligations."
+
+[[path_targets.slot_specs]]
+slot_id = "shame_avoidance_characterization"
+label = "Shame Avoidance Characterization"
+cue = "羞耻规避塑形"
+canonical_description = "Characters reveal themselves by hiding, deflecting, or pre-empting humiliation and exposure."
+
+[[path_targets]]
+path = "expression_system.sensory_rules"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "resource_pressure",
+  "body_assetization",
+  "family_survival",
+  "commercialized_conflict",
+  "identity_shame",
+]
+downstream_shape = "Emit sensory rules that make bodily cost, scarcity, and humiliation tactile."
+slot_match_threshold = 0.70
+soft_slot_match_floor = 0.62
+prompt_hints = [
+  "Prefer residue, wear, cramped texture, bodily aftermath, and shame signals.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "bodily_wear_sensory"
+label = "Bodily Wear Sensory"
+cue = "身体磨损感官"
+canonical_description = "Sensory detail lands through soreness, residue, incision aftermath, or bodily wear."
+
+[[path_targets.slot_specs]]
+slot_id = "paperwork_space_sensory"
+label = "Paperwork Space Sensory"
+cue = "文书空间感官"
+canonical_description = "Sensory detail is attached to cramped counters, waiting rooms, papers, screens, and seals."
+
+[[path_targets.slot_specs]]
+slot_id = "scarcity_sensory"
+label = "Scarcity Sensory"
+cue = "匮乏压迫感官"
+canonical_description = "Sensory detail lands through hunger, stale air, reused materials, or cramped scarcity."
+
+[[path_targets.slot_specs]]
+slot_id = "humiliation_signal_sensory"
+label = "Humiliation Signal Sensory"
+cue = "羞辱信号感官"
+canonical_description = "Sensory detail marks humiliation through gazes, silence, posture, or exposed status markers."
+
+[[path_targets]]
+path = "aesthetics_system.core_axes"
+target_count = 5
+max_new_rows = 3
+retrieval_top_k = 12
+bucket_allowlist = [
+  "institutional_pipeline",
+  "dark_humor",
+  "body_assetization",
+  "exam_screening",
+  "identity_shame",
+  "collective_production",
+]
+downstream_shape = "Emit stable core-axis rules rather than one-off thematic labels."
+slot_match_threshold = 0.68
+soft_slot_match_floor = 0.60
+prompt_hints = [
+  "Prefer named core mechanisms that can anchor multiple later rules.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "resource_pressure_axis"
+label = "Resource Pressure Axis"
+cue = "资源压力主轴"
+canonical_description = "The work persistently converts survival into visible resource arithmetic."
+
+[[path_targets.slot_specs]]
+slot_id = "institutional_absurdity_axis"
+label = "Institutional Absurdity Axis"
+cue = "制度荒诞主轴"
+canonical_description = "The work makes cruelty arrive through workflow, notices, approvals, and formal procedure."
+
+[[path_targets.slot_specs]]
+slot_id = "screening_class_axis"
+label = "Screening Class Axis"
+cue = "筛选阶层主轴"
+canonical_description = "The work converts education or access into ranked screening and class gates."
+
+[[path_targets.slot_specs]]
+slot_id = "body_commodification_axis"
+label = "Body Commodification Axis"
+cue = "身体资产化主轴"
+canonical_description = "The work prices bodies, organs, surgery, and fertility like negotiable assets."
+
+[[path_targets.slot_specs]]
+slot_id = "dark_humor_axis"
+label = "Dark Humor Axis"
+cue = "冷面黑色幽默主轴"
+canonical_description = "The work delivers cruel or absurd facts in flat, procedural, almost businesslike tones."
+
+[[path_targets]]
+path = "aesthetics_system.pressure_axes"
+target_count = 5
+max_new_rows = 3
+retrieval_top_k = 12
+bucket_allowlist = [
+  "resource_pressure",
+  "family_survival",
+  "gray_labor",
+  "asset_repricing",
+  "commercialized_conflict",
+]
+downstream_shape = "Emit pressure-axis rules that name one concrete source of strain per row."
+slot_match_threshold = 0.68
+soft_slot_match_floor = 0.60
+prompt_hints = [
+  "Prefer concrete pressure sources: debt, approvals, rankings, bodily cost, family burden.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "cashflow_pressure_axis"
+label = "Cashflow Pressure Axis"
+cue = "现金流压力轴"
+canonical_description = "Pressure comes from cashflow, debt service, repayment, and immediate survival math."
+
+[[path_targets.slot_specs]]
+slot_id = "approval_pressure_axis"
+label = "Approval Pressure Axis"
+cue = "审批压力轴"
+canonical_description = "Pressure comes from formal release points, signatures, notices, and institutional choke points."
+
+[[path_targets.slot_specs]]
+slot_id = "ranking_pressure_axis"
+label = "Ranking Pressure Axis"
+cue = "排名门槛压力轴"
+canonical_description = "Pressure comes from score ladders, interviews, quota limits, and access ranking."
+
+[[path_targets.slot_specs]]
+slot_id = "body_cost_pressure_axis"
+label = "Body Cost Pressure Axis"
+cue = "身体成本压力轴"
+canonical_description = "Pressure comes from bodily tradeoffs, replacement cost, surgery pricing, or fertility loss."
+
+[[path_targets.slot_specs]]
+slot_id = "family_burden_pressure_axis"
+label = "Family Burden Pressure Axis"
+cue = "家庭拖拽压力轴"
+canonical_description = "Pressure comes from remittance, household upkeep, and family survival obligations."
+
+[[path_targets]]
+path = "aesthetics_system.humor_recipe"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "dark_humor",
+  "institutional_pipeline",
+  "contract_sales",
+]
+downstream_shape = "Emit reusable humor mechanics rather than a label that something is funny."
+slot_match_threshold = 0.68
+soft_slot_match_floor = 0.60
+prompt_hints = [
+  "Prefer setup/payoff mechanics built from seriousness plus absurd transaction or procedure.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "deadpan_setup_humor"
+label = "Deadpan Setup Humor"
+cue = "冷面铺垫笑法"
+canonical_description = "Set up absurdity in a flat, businesslike tone instead of comic signaling."
+
+[[path_targets.slot_specs]]
+slot_id = "serious_absurd_object_humor"
+label = "Serious Absurd Object Humor"
+cue = "正经荒诞物件笑法"
+canonical_description = "Make a form, package, organ, or notice absurd by describing it as routine business."
+
+[[path_targets.slot_specs]]
+slot_id = "transactional_punchline_humor"
+label = "Transactional Punchline Humor"
+cue = "交易结算包袱"
+canonical_description = "Land the punchline by revealing price, settlement, rate, or hidden cost."
+
+[[path_targets.slot_specs]]
+slot_id = "procedural_cruelty_humor"
+label = "Procedural Cruelty Humor"
+cue = "流程残酷笑法"
+canonical_description = "Land humor by letting cruel outcomes emerge as calm procedure or policy."
+
+[[path_targets]]
+path = "aesthetics_system.satire_targets"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "dark_humor",
+  "institutional_pipeline",
+  "exam_screening",
+  "asset_repricing",
+  "contract_sales",
+]
+downstream_shape = "Emit satire targets that identify what system or logic is being mocked."
+slot_match_threshold = 0.68
+soft_slot_match_floor = 0.60
+prompt_hints = [
+  "Prefer the mocked system itself, not a broad complaint about society.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "approval_chain_satire_target"
+label = "Approval Chain Satire Target"
+cue = "审批链条讽刺靶点"
+canonical_description = "Satire targets the endless approval and release chain rather than individual villains."
+
+[[path_targets.slot_specs]]
+slot_id = "pricing_system_satire_target"
+label = "Pricing System Satire Target"
+cue = "定价系统讽刺靶点"
+canonical_description = "Satire targets a system that prices survival, bodies, or dignity as negotiable goods."
+
+[[path_targets.slot_specs]]
+slot_id = "screening_ladder_satire_target"
+label = "Screening Ladder Satire Target"
+cue = "筛选阶梯讽刺靶点"
+canonical_description = "Satire targets score ladders, ranking gates, and eligibility filters that sort people."
+
+[[path_targets.slot_specs]]
+slot_id = "outsourced_morality_satire_target"
+label = "Outsourced Morality Satire Target"
+cue = "外包道德讽刺靶点"
+canonical_description = "Satire targets systems that outsource cruelty into forms, contracts, and procedural neutrality."
+
+[[path_targets]]
+path = "aesthetics_system.nonstandard_xianxia_rules"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "body_assetization",
+  "commercialized_conflict",
+  "collective_production",
+  "resource_pressure",
+]
+downstream_shape = "Emit the nonstandard xianxia mechanisms that replace orthodox cultivation logic."
+slot_match_threshold = 0.68
+soft_slot_match_floor = 0.60
+prompt_hints = [
+  "Prefer marketized, laborized, and institutionalized cultivation replacements.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "cultivation_as_employment_rule"
+label = "Cultivation as Employment Rule"
+cue = "修炼职业化"
+canonical_description = "Cultivation is treated like employment, staffing, or measurable output instead of pure destiny."
+
+[[path_targets.slot_specs]]
+slot_id = "body_as_asset_rule"
+label = "Body as Asset Rule"
+cue = "身体资产化"
+canonical_description = "Bodies, organs, fertility, and modifications are priced and circulated like assets."
+
+[[path_targets.slot_specs]]
+slot_id = "school_as_market_gate_rule"
+label = "School as Market Gate Rule"
+cue = "学校市场闸口"
+canonical_description = "Schools and institutions act as market screening gates rather than sacred advancement paths."
+
+[[path_targets.slot_specs]]
+slot_id = "fate_as_contract_process_rule"
+label = "Fate as Contract Process Rule"
+cue = "命运合同流程化"
+canonical_description = "Advancement is determined by contracts, approvals, or priced procedures rather than heavenly destiny."
+
+[[path_targets]]
+path = "voice_contract.register_mix"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "resource_pressure",
+  "institutional_pipeline",
+  "dark_humor",
+  "contract_sales",
+  "family_survival",
+  "identity_shame",
+]
+downstream_shape = "Emit register-mix rules that specify how formal, transactional, and survival diction are blended."
+slot_match_threshold = 0.68
+soft_slot_match_floor = 0.60
+prompt_hints = [
+  "Prefer executable register collisions over broad voice praise.",
+  "Each row should isolate one diction mix and explain what it does downstream.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "procedural_notice_register_mix"
+label = "Procedural Notice Register Mix"
+cue = "公文通知口吻混编"
+canonical_description = "Mix notice, approval, checklist, or workflow diction into narration so conflict sounds like procedure before it sounds emotional."
+
+[[path_targets.slot_specs]]
+slot_id = "debt_ledger_register_mix"
+label = "Debt Ledger Register Mix"
+cue = "账本生存口吻混编"
+canonical_description = "Mix debt, repayment, balance-sheet, and survival-math diction into choices and reactions."
+
+[[path_targets.slot_specs]]
+slot_id = "sales_contract_register_mix"
+label = "Sales Contract Register Mix"
+cue = "销售合同口吻混编"
+canonical_description = "Mix package, contract, rate, and pitch language into body, school, or opportunity descriptions."
+
+[[path_targets.slot_specs]]
+slot_id = "deadpan_absurd_register_mix"
+label = "Deadpan Absurd Register Mix"
+cue = "冷面荒诞口吻混编"
+canonical_description = "Keep the sentence formally calm and businesslike while the content itself becomes cruel or absurd."
+
+[[path_targets]]
+path = "voice_contract.negative_pitfalls"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "resource_pressure",
+  "institutional_pipeline",
+  "dark_humor",
+  "contract_sales",
+  "identity_shame",
+  "body_assetization",
+]
+downstream_shape = "Emit forbidden_action + correction_guideline pairs that guard the voice contract."
+slot_match_threshold = 0.68
+soft_slot_match_floor = 0.60
+prompt_hints = [
+  "Prefer specific voice failures with direct repair guidance.",
+  "Do not restate the theme; state what wording to forbid and what wording to switch to.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "lyrical_self_pity_pitfall"
+label = "Lyrical Self Pity Pitfall"
+cue = "抒情自怜陷阱"
+canonical_description = "Do not let survival pressure dissolve into lyrical sadness, self-pity, or empty emotional fog."
+
+[[path_targets.slot_specs]]
+slot_id = "generic_institution_label_pitfall"
+label = "Generic Institution Label Pitfall"
+cue = "泛制度标签陷阱"
+canonical_description = "Do not replace notices, approvals, and checkpoints with abstract labels like system oppression or bureaucracy."
+
+[[path_targets.slot_specs]]
+slot_id = "loud_joke_pitfall"
+label = "Loud Joke Pitfall"
+cue = "大声搞笑陷阱"
+canonical_description = "Do not over-signal humor with exaggerated jokes when the intended effect is deadpan absurdity."
+
+[[path_targets.slot_specs]]
+slot_id = "pure_shock_pitfall"
+label = "Pure Shock Pitfall"
+cue = "猎奇惊吓陷阱"
+canonical_description = "Do not present bodily cost as pure grotesque shock; keep the pricing, package, or tradeoff logic visible."
+
+[[path_targets]]
+path = "character_arc_rules"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "resource_pressure",
+  "family_survival",
+  "gray_labor",
+  "identity_shame",
+  "collective_production",
+]
+downstream_shape = "Emit arc rules that show how characters change under cost, shame, labor, and procedural pressure."
+slot_match_threshold = 0.68
+soft_slot_match_floor = 0.60
+prompt_hints = [
+  "Prefer behavior change driven by repayment, shame, obligation, or workflow logic.",
+  "Each row should isolate one repeatable arc trigger rather than summarize the whole character.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "cost_repricing_arc"
+label = "Cost Repricing Arc"
+cue = "代价重估弧线"
+canonical_description = "A character changes when the cost-benefit math is repriced and a previously acceptable tradeoff becomes impossible."
+
+[[path_targets.slot_specs]]
+slot_id = "shame_to_tactic_arc"
+label = "Shame To Tactic Arc"
+cue = "羞耻转策略弧线"
+canonical_description = "A character responds to shame, exposure, or status loss by learning evasive, bargaining, or face-saving tactics."
+
+[[path_targets.slot_specs]]
+slot_id = "obligation_hardening_arc"
+label = "Obligation Hardening Arc"
+cue = "责任硬化弧线"
+canonical_description = "Family or collective burden hardens the character into more procedural, sacrificial, or utilitarian decisions."
+
+[[path_targets.slot_specs]]
+slot_id = "procedure_internalization_arc"
+label = "Procedure Internalization Arc"
+cue = "流程内化弧线"
+canonical_description = "A character gradually internalizes notices, approvals, and eligibility gates, and starts thinking in checklist or workflow terms."
+
+[[path_targets]]
+path = "negative_rules"
+target_count = 6
+max_new_rows = 3
+retrieval_top_k = 12
+bucket_allowlist = [
+  "resource_pressure",
+  "institutional_pipeline",
+  "exam_screening",
+  "body_assetization",
+  "dark_humor",
+  "family_survival",
+  "asset_repricing",
+  "contract_sales",
+  "commercialized_conflict",
+]
+downstream_shape = "Emit global forbidden_action + correction_guideline pairs that preserve downstream controllability."
+slot_match_threshold = 0.68
+soft_slot_match_floor = 0.60
+prompt_hints = [
+  "Prefer concrete downstream bans tied to current evidence.",
+  "Correction guidance should tell the writer which mechanism to surface instead.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "no_vague_angst"
+label = "No Vague Angst"
+cue = "禁止空泛苦难"
+canonical_description = "Do not flatten debt, shortage, or repayment pressure into vague suffering or depression."
+
+[[path_targets.slot_specs]]
+slot_id = "no_generic_bureaucracy"
+label = "No Generic Bureaucracy"
+cue = "禁止泛官僚控诉"
+canonical_description = "Do not replace concrete approval chains with generic complaints about the system or power."
+
+[[path_targets.slot_specs]]
+slot_id = "no_school_theme_blur"
+label = "No School Theme Blur"
+cue = "禁止校园主题化"
+canonical_description = "Do not blur rankings, quotas, and interview gates into generic campus or youth themes."
+
+[[path_targets.slot_specs]]
+slot_id = "no_body_horror_blur"
+label = "No Body Horror Blur"
+cue = "禁止猎奇化身体描写"
+canonical_description = "Do not turn body modification, surgery, or fertility tradeoffs into pure body horror."
+
+[[path_targets.slot_specs]]
+slot_id = "no_theme_summary"
+label = "No Theme Summary"
+cue = "禁止主题总论"
+canonical_description = "Do not summarize the work as social critique, dark humor, or pressure writing without naming the mechanism."
+
+[[path_targets.slot_specs]]
+slot_id = "no_moralizing_resolution"
+label = "No Moralizing Resolution"
+cue = "禁止说教收束"
+canonical_description = "Do not end the rule with moral judgment, inspirational uplift, or explicit condemnation; keep it operational."
+
+[[path_targets]]
+path = "worldbook_binding.routing_hints"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 10
+bucket_allowlist = [
+  "institutional_pipeline",
+  "exam_screening",
+  "asset_repricing",
+  "contract_sales",
+  "commercialized_conflict",
+  "dark_humor",
+]
+downstream_shape = "Emit concrete matcher -> route_target_action pairs that can drive downstream routing."
+dedupe_threshold = 0.92
+slot_match_threshold = 0.80
+soft_slot_match_floor = 0.72
+prompt_hints = [
+  "Prefer matchers that trigger on notices, repayment gates, screening thresholds, or body-modification tradeoffs.",
+  "Worldbook routing stays evidence-first in this round; do not rely on a separate atom layer.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "procedural_notice_router"
+label = "Procedural Notice Router"
+cue = "流程通知路由"
+canonical_description = "When conflict is advanced by notices, forms, approvals, contracts, or workflow documents before emotion, route to the institutional procedure or satire worldbook entry instead of generic mood handling."
+downstream_shape = "matcher + route_target_action"
+fresh_evidence_required = true
+
+[[path_targets.slot_specs]]
+slot_id = "repayment_gate_router"
+label = "Repayment Gate Router"
+cue = "回款卡点路由"
+canonical_description = "When action is gated by debt, repayment windows, compensation, pricing, or cashflow pressure, route to the repayment and resource-pressure rules instead of treating it as generic hardship."
+downstream_shape = "matcher + route_target_action"
+fresh_evidence_required = true
+
+[[path_targets.slot_specs]]
+slot_id = "screening_gate_router"
+label = "Screening Gate Router"
+cue = "筛选门槛路由"
+canonical_description = "When ranking, score thresholds, interviews, admission screens, or eligibility checks decide the next move, route to the screening and institutional gate worldbook instead of a generic school-theme rule."
+downstream_shape = "matcher + route_target_action"
+fresh_evidence_required = true
+
+[[path_targets.slot_specs]]
+slot_id = "body_cost_router"
+label = "Body Cost Router"
+cue = "身体成本路由"
+canonical_description = "When surgery, replacement parts, fertility loss, organ exchange, or bodily modification cost determines the scene, route to the body-assetization and body-cost worldbook entry."
+downstream_shape = "matcher + route_target_action"
+fresh_evidence_required = true
+
+[[path_targets]]
+path = "worldbook_binding.rag_worthy"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 12
+bucket_allowlist = [
+  "resource_pressure",
+  "institutional_pipeline",
+  "exam_screening",
+  "body_assetization",
+  "asset_repricing",
+  "commercialized_conflict",
+]
+downstream_shape = "Emit retrievable rules that can be recalled at generation time."
+dedupe_threshold = 0.92
+slot_match_threshold = 0.78
+soft_slot_match_floor = 0.70
+prompt_hints = [
+  "Prefer durable retrieval items such as repayment mechanics, approval chains, screening thresholds, and body-cost rules.",
+  "Stay evidence-first; use the few-shot shapes, not a separate atom workflow.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "repayment_retrieval"
+label = "Repayment Retrieval"
+cue = "回款规则入库"
+canonical_description = "Store the reusable rule that actions are gated by debt service, repayment windows, cashflow, or compensation settlement so downstream generation can recall it quickly."
+downstream_shape = "trigger + constraint"
+fresh_evidence_required = true
+
+[[path_targets.slot_specs]]
+slot_id = "approval_chain_retrieval"
+label = "Approval Chain Retrieval"
+cue = "审批链规则入库"
+canonical_description = "Store the stable rule that notices, approvals, signatures, workflow checkpoints, or institutional forms control scene progression."
+downstream_shape = "trigger + constraint"
+fresh_evidence_required = true
+
+[[path_targets.slot_specs]]
+slot_id = "screening_threshold_retrieval"
+label = "Screening Threshold Retrieval"
+cue = "筛选门槛入库"
+canonical_description = "Store the reusable screening rule that ranking, score, interview, quota, or eligibility thresholds decide access to resources."
+downstream_shape = "trigger + constraint"
+fresh_evidence_required = true
+
+[[path_targets.slot_specs]]
+slot_id = "body_modification_retrieval"
+label = "Body Modification Retrieval"
+cue = "身体改造入库"
+canonical_description = "Store the durable rule that surgery, replacement parts, fertility tradeoffs, or organ exchange are priced like assets and change action choices."
+downstream_shape = "trigger + constraint"
+fresh_evidence_required = true
+
+[[path_targets]]
+path = "worldbook_binding.worldbook_worthy"
+target_count = 4
+max_new_rows = 2
+retrieval_top_k = 12
+bucket_allowlist = [
+  "institutional_pipeline",
+  "exam_screening",
+  "body_assetization",
+  "asset_repricing",
+  "contract_sales",
+  "resource_pressure",
+]
+downstream_shape = "Emit stable worldbook facts or rules that should survive beyond one scene."
+dedupe_threshold = 0.92
+slot_match_threshold = 0.78
+soft_slot_match_floor = 0.70
+prompt_hints = [
+  "Prefer stable institutional definitions, pricing systems, screening gates, and approval mechanics.",
+  "Keep rows worldbook-like and evidence-first; do not spin up a new atom abstraction in this round.",
+]
+
+[[path_targets.slot_specs]]
+slot_id = "institutional_workflow_worldbook"
+label = "Institutional Workflow Worldbook"
+cue = "制度流程设定"
+canonical_description = "Capture the durable institutional workflow: forms, notices, approvals, signatures, queueing, or checkpoint procedures that consistently govern progression."
+downstream_shape = "trigger + constraint"
+fresh_evidence_required = true
+
+[[path_targets.slot_specs]]
+slot_id = "repayment_economy_worldbook"
+label = "Repayment Economy Worldbook"
+cue = "回款经济设定"
+canonical_description = "Capture the stable repayment economy: debt service, settlement windows, compensation schemes, cashflow rules, or repricing mechanisms that persist across scenes."
+downstream_shape = "trigger + constraint"
+fresh_evidence_required = true
+
+[[path_targets.slot_specs]]
+slot_id = "screening_system_worldbook"
+label = "Screening System Worldbook"
+cue = "筛选体系设定"
+canonical_description = "Capture the durable screening system: ranking ladders, score thresholds, interview filters, quota rules, or eligibility gates."
+downstream_shape = "trigger + constraint"
+fresh_evidence_required = true
+
+[[path_targets.slot_specs]]
+slot_id = "body_asset_system_worldbook"
+label = "Body Asset System Worldbook"
+cue = "身体资产体系设定"
+canonical_description = "Capture the durable body-asset system: surgery packages, replacement parts, fertility tradeoffs, organ exchange, or body modification pricing that shapes future scenes."
+downstream_shape = "trigger + constraint"
+fresh_evidence_required = true

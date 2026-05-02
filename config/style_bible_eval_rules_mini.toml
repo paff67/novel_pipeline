@@ -1,0 +1,58 @@
+[scoring]
+pass_score = 0.70
+warn_score = 0.50
+
+[weights]
+specificity = 0.34
+actionability = 0.33
+grounding = 0.33
+
+[thresholds]
+row_pass_score = 0.70
+row_warn_score = 0.50
+section_pass_ratio = 0.90
+section_warn_ratio = 0.65
+
+[required_scalars]
+fields = [
+  "style_id",
+  "scope",
+  "narrative_system.perspective",
+  "narrative_system.distance",
+  "narrative_system.temporality",
+  "voice_contract.narrator_voice",
+  "voice_contract.inner_monologue_mode",
+]
+
+[minimums]
+"narrative_system.engine" = 1
+"narrative_system.pacing_rules" = 1
+"narrative_system.plot_node_logic" = 1
+"expression_system.description_rules" = 1
+"expression_system.dialogue_rules" = 1
+"expression_system.characterization_rules" = 1
+"expression_system.sensory_rules" = 1
+"aesthetics_system.core_axes" = 1
+"aesthetics_system.pressure_axes" = 1
+"aesthetics_system.humor_recipe" = 1
+"aesthetics_system.satire_targets" = 1
+"aesthetics_system.nonstandard_xianxia_rules" = 1
+"voice_contract.register_mix" = 1
+"voice_contract.negative_pitfalls" = 1
+"character_arc_rules" = 1
+"worldbook_binding.rag_worthy" = 1
+"worldbook_binding.worldbook_worthy" = 1
+"worldbook_binding.routing_hints" = 1
+"negative_rules" = 1
+
+[coverage_targets]
+core_axis_ids = [
+  "resource_pressure",
+  "institutional_absurdity",
+  "dark_humor",
+]
+core_bucket_ids = [
+  "resource_pressure",
+  "institutional_pipeline",
+  "dark_humor",
+]

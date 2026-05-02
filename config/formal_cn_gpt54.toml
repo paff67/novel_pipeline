@@ -1,0 +1,25 @@
+﻿[models]
+fact_model = "gpt-5.4"
+style_model = "gpt-5.4"
+env_profile = "gpt"
+fact_temperature = 0.1
+style_temperature = 0.2
+fact_max_output_tokens = 2048
+style_max_output_tokens = 3072
+timeout_seconds = 150
+retry_count = 3
+response_format = "json_object"
+max_requests_per_minute = 3.0
+
+[scene_split]
+min_chars = 500
+target_chars = 900
+max_chars = 1400
+
+[style_windows]
+window_size = 2
+stride = 2
+
+[paths]
+prompt_dir = "prompts"
+

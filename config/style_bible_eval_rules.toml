@@ -1,0 +1,74 @@
+[scoring]
+pass_score = 0.72
+warn_score = 0.55
+
+[weights]
+specificity = 0.34
+actionability = 0.33
+grounding = 0.33
+
+[thresholds]
+row_pass_score = 0.72
+row_warn_score = 0.55
+section_pass_ratio = 0.90
+section_warn_ratio = 0.65
+
+[required_scalars]
+fields = [
+  "style_id",
+  "scope",
+  "narrative_system.perspective",
+  "narrative_system.distance",
+  "narrative_system.temporality",
+  "voice_contract.narrator_voice",
+  "voice_contract.inner_monologue_mode",
+]
+
+[minimums]
+"narrative_system.engine" = 3
+"narrative_system.pacing_rules" = 4
+"narrative_system.plot_node_logic" = 3
+"expression_system.description_rules" = 4
+"expression_system.dialogue_rules" = 4
+"expression_system.characterization_rules" = 4
+"expression_system.sensory_rules" = 4
+"aesthetics_system.core_axes" = 5
+"aesthetics_system.pressure_axes" = 5
+"aesthetics_system.humor_recipe" = 4
+"aesthetics_system.satire_targets" = 4
+"aesthetics_system.nonstandard_xianxia_rules" = 4
+"voice_contract.register_mix" = 4
+"voice_contract.negative_pitfalls" = 4
+"character_arc_rules" = 4
+"worldbook_binding.rag_worthy" = 4
+"worldbook_binding.worldbook_worthy" = 4
+"worldbook_binding.routing_hints" = 4
+"negative_rules" = 6
+
+[coverage_targets]
+core_axis_ids = [
+  "resource_pressure",
+  "education_filter",
+  "body_modification",
+  "institutional_absurdity",
+  "dark_humor",
+  "family_labor",
+  "labor_logic",
+  "identity_shame",
+  "production_commonwealth",
+  "asset_repricing",
+]
+core_bucket_ids = [
+  "resource_pressure",
+  "exam_screening",
+  "body_assetization",
+  "institutional_pipeline",
+  "dark_humor",
+  "family_survival",
+  "gray_labor",
+  "identity_shame",
+  "collective_production",
+  "asset_repricing",
+  "contract_sales",
+  "commercialized_conflict",
+]

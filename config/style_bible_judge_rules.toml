@@ -1,0 +1,158 @@
+[scoring]
+pass_score = 75
+warn_score = 60
+
+[weights]
+axis_coverage = 8
+mechanism_specificity = 20
+evidence_faithfulness = 16
+trace_auditability = 14
+routing_executability = 10
+worldbook_exportability = 10
+rag_atomicity = 8
+prompt_preset_usability = 6
+anti_genericity = 4
+anti_pattern_resistance = 4
+
+[thresholds]
+min_axis_hit_ratio = 0.75
+warn_axis_hit_ratio = 0.5
+min_mechanism_ratio = 0.65
+warn_mechanism_ratio = 0.45
+min_evidence_ratio = 0.5
+warn_evidence_ratio = 0.25
+min_trace_audit_ratio = 0.65
+warn_trace_audit_ratio = 0.45
+min_downstream_similarity = 0.4
+warn_downstream_similarity = 0.25
+min_prompt_ratio = 0.35
+warn_prompt_ratio = 0.2
+max_generic_ratio = 0.2
+warn_generic_ratio = 0.4
+max_anti_pattern_violation_ratio = 0.15
+warn_anti_pattern_violation_ratio = 0.3
+min_pass_case_ratio = 0.6
+warn_pass_case_ratio = 0.45
+similarity_floor = 0.4
+criterion_win_delta = 1.0
+rag_atomic_length_min = 6
+rag_atomic_length_max = 40
+rule_item_soft_max = 8
+rule_item_hard_max = 10
+surface_item_soft_max = 8
+surface_item_hard_max = 10
+supporting_evidence_soft_max = 18
+supporting_evidence_hard_max = 20
+forbidden_output_similarity = 0.78
+
+[resources]
+anti_pattern_registry_file = "style_bible_antipattern_registry.json"
+
+[search_paths]
+rule_prefixes = [
+  "narrative_system",
+  "expression_system",
+  "aesthetics_system",
+  "voice_contract",
+  "character_arc_rules",
+  "negative_rules",
+]
+routing_prefixes = ["worldbook_binding.routing_hints"]
+worldbook_prefixes = ["worldbook_binding.worldbook_worthy"]
+rag_prefixes = ["worldbook_binding.rag_worthy"]
+evidence_prefixes = ["supporting_evidence"]
+
+[actionable_cues]
+phrases = [
+  "使用",
+  "保持",
+  "避免",
+  "不要",
+  "优先",
+  "通过",
+  "让",
+  "把",
+  "将",
+  "当",
+  "如果",
+  "遇到",
+  "出现",
+  "先",
+  "再",
+  "需要",
+  "必须",
+  "应当",
+  "应",
+  "用",
+]
+
+[generic_language]
+patterns = [
+  "很有张力",
+  "张力很强",
+  "非常细腻",
+  "十分细腻",
+  "很真实",
+  "真实感很强",
+  "很有代入感",
+  "很高级",
+  "非常高级",
+  "很精彩",
+  "非常精彩",
+  "值得学习",
+  "风格独特",
+  "很独特",
+  "令人印象深刻",
+  "感染力很强",
+  "氛围感很强",
+]
+
+[[axis_groups]]
+id = "resource_pressure"
+label = "资源 / 债务压力"
+match_any = ["债务", "贷款", "现金流", "手术费", "没钱", "穷", "补习费", "借贷", "成本", "收益"]
+
+[[axis_groups]]
+id = "education_filter"
+label = "教育门槛 / 阶层筛选"
+match_any = ["学校", "排名", "分数", "面试", "示范班", "升学", "教育", "门槛", "考试", "资格"]
+
+[[axis_groups]]
+id = "body_modification"
+label = "身体异化 / 改造成本"
+match_any = ["身体", "改造", "绝育", "变性", "器官", "肉身", "植入", "手术", "法骸", "灵根"]
+
+[[axis_groups]]
+id = "institutional_absurdity"
+label = "制度荒诞 / 流程口吻"
+match_any = ["制度", "规则", "流程", "通知", "标准", "政策", "条件", "合同", "审批", "管理"]
+
+[[axis_groups]]
+id = "dark_humor"
+label = "黑色幽默 / 冷面吐槽"
+match_any = ["黑色幽默", "冷面", "吐槽", "讽刺", "荒诞", "反差", "笑点", "冷笑"]
+
+[[axis_groups]]
+id = "family_labor"
+label = "家庭劳动 / 资源交换"
+match_any = ["家庭", "母亲", "加班", "转账", "资源交换", "兼职", "体面", "凑钱", "还贷"]
+
+[[axis_groups]]
+id = "labor_logic"
+label = "劳动逻辑"
+match_any = ["劳动", "打工", "工时", "时薪", "绩效", "加班", "赚钱", "接活", "补课", "工作"]
+
+[[axis_groups]]
+id = "identity_shame"
+label = "身份羞耻"
+match_any = ["羞耻", "丢脸", "体面", "地位", "外地人", "掉价", "侮辱", "看穿", "排名低"]
+
+[[axis_groups]]
+id = "production_commonwealth"
+label = "生产共同体"
+match_any = ["共同训练", "共享资源", "互相带活", "生产共同体", "一起赚钱", "互助", "协作", "真灵根"]
+
+[[axis_groups]]
+id = "asset_repricing"
+label = "重新估值 / 围猎"
+match_any = ["价值", "估值", "围猎", "招揽", "打压", "重新定价", "更肥更鲜", "合同", "赔偿"]

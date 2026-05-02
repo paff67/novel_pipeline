@@ -1,0 +1,110 @@
+{
+  "GENERIC_MECHANISM": {
+    "severity": 5,
+    "tags": ["global", "generic", "mechanism"],
+    "applies_to_buckets": ["*"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "作品经常通过细腻而有张力的方式推进剧情。",
+    "why_bad": "只有抽象赞美，没有触发条件、推进逻辑、约束边界，也没有可执行下游含义。",
+    "good_pattern": "把规则写成稳定机制句，说明在什么条件下触发、通过什么结构推进、会约束后续什么写法。"
+  },
+  "KEYWORD_STUFFING": {
+    "severity": 5,
+    "tags": ["global", "keyword", "generic"],
+    "applies_to_buckets": ["*"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "债务、学校、流程、黑色幽默、羞耻、资源、制度一起构成作品特色。",
+    "why_bad": "只是把关键词排成列表，没有建立机制关系，也没有说明这些词如何共同驱动叙事。",
+    "good_pattern": "只保留彼此之间有明确因果或结构关系的关键词，并把它们压缩成一条可执行规则。"
+  },
+  "NATURAL_LANGUAGE_EVIDENCE": {
+    "severity": 5,
+    "tags": ["global", "grounding", "evidence"],
+    "applies_to_buckets": ["*"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "evidence_refs: [\"场景中体现了资源焦虑\", \"这里说明了制度压力\"]",
+    "why_bad": "把自然语言描述伪装成证据，审计链直接断裂。",
+    "good_pattern": "证据字段只能填写输入里已经出现过的 ref 原值，例如 scene:0141_003。"
+  },
+  "SINGLE_CASE_OVERFIT": {
+    "severity": 4,
+    "tags": ["global", "overfit", "case"],
+    "applies_to_buckets": ["*"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "主角在第 141 章借手术费时会先找同学凑钱。",
+    "why_bad": "只描述某个具体事件，无法泛化成稳定机制。",
+    "good_pattern": "把多个 ref 的共同做法抽成机制，例如关键推进前先结算现实成本，而不是记录单次事件细节。"
+  },
+  "VAGUE_ROUTING": {
+    "severity": 5,
+    "tags": ["routing", "generic", "resource_pressure", "institutional_pipeline", "exam_screening"],
+    "applies_to_buckets": ["resource_pressure", "institutional_pipeline", "exam_screening", "contract_sales"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "当剧情进入紧张阶段时触发相关节点。",
+    "why_bad": "没有明确触发条件，没有路由目标，也没有可观测信号。",
+    "good_pattern": "把路由句写成“当出现某种压力/门槛/制度信号时，路由到某类节点或知识面”。"
+  },
+  "PROCEDURE_WITHOUT_CONSTRAINT": {
+    "severity": 4,
+    "tags": ["institutional_pipeline", "institutional_absurdity", "procedure"],
+    "applies_to_buckets": ["institutional_pipeline", "exam_screening", "contract_sales"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "作品喜欢用流程口吻。",
+    "why_bad": "只看见表面语气，没有说明流程语言如何把残酷决策制度化、常态化。",
+    "good_pattern": "指出制度语言的功能，例如它如何把筛选、压价、身体成本包装成正常流程。"
+  },
+  "COSTLESS_ADVANCEMENT": {
+    "severity": 4,
+    "tags": ["resource_pressure", "body_assetization", "commercialized_conflict", "cost"],
+    "applies_to_buckets": ["resource_pressure", "body_assetization", "commercialized_conflict", "family_survival"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "角色靠机缘自然变强。",
+    "why_bad": "忽略了原作里反复出现的成本结算、资格结算、债务压力。",
+    "good_pattern": "把成长和推进写成先结算代价、再决定行动，不要把关键推进写成无成本机缘。"
+  },
+  "SURFACE_ONLY_HUMOR": {
+    "severity": 4,
+    "tags": ["dark_humor", "humor", "tone"],
+    "applies_to_buckets": ["dark_humor"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "作品很好笑，荒诞感很强。",
+    "why_bad": "只描述情绪结果，没有说明笑点的生产机制。",
+    "good_pattern": "写清楚黑色幽默来自哪里，例如制度口吻与残酷现实的反差、算账逻辑对神圣叙事的去魅。"
+  },
+  "AD_COPY_CONFUSION": {
+    "severity": 4,
+    "tags": ["contract_sales", "commercialized_conflict", "ad_copy"],
+    "applies_to_buckets": ["contract_sales", "commercialized_conflict"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "作品经常出现套餐、推广、授权，所以风格就是营销话术。",
+    "why_bad": "把表层广告词直接抬升成风格本体，没有判断它是否真的参与制度推进。",
+    "good_pattern": "只有当销售话术稳定承担筛选、招揽、估值或压迫功能时，才把它提炼为机制。"
+  },
+  "UNGROUNDED_WORLDBOOK": {
+    "severity": 4,
+    "tags": ["worldbook", "global", "knowledge"],
+    "applies_to_buckets": ["*"],
+    "applies_to_phases": ["reducer"],
+    "bad_output": "把抽象气质、阅读感受、作者评价写进 worldbook。",
+    "why_bad": "worldbook 需要的是可检索、可绑定、可路由的事实与规则，而不是审美感想。",
+    "good_pattern": "只把机构门槛、制度规则、资源约束、可复用社会常识写进 worldbook 与 rag。"
+  },
+  "RECAP_INSTEAD_OF_RULE": {
+    "severity": 4,
+    "tags": ["global", "recap", "summary"],
+    "applies_to_buckets": ["*"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "先发生 A，再发生 B，最后人物产生情绪变化。",
+    "why_bad": "这是事件回顾，不是可复用规则。",
+    "good_pattern": "把事件顺序压缩为可迁移的推进模板，例如先资格筛查，后资源结算，再进入冲突升级。"
+  },
+  "RULE_FRAGMENTATION": {
+    "severity": 3,
+    "tags": ["global", "dedupe", "merge"],
+    "applies_to_buckets": ["*"],
+    "applies_to_phases": ["bucket_synthesis", "reducer"],
+    "bad_output": "把同一机制拆成三四条近义句分别输出。",
+    "why_bad": "降低信息熵，也会让 reducer 难以合并稳定规则。",
+    "good_pattern": "优先合并近义机制，把最能约束下游写法的一条留下来，并合并证据。"
+  }
+}
