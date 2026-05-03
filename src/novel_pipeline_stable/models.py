@@ -202,6 +202,24 @@ class StyleWindowSignalResult(BaseModel):
     bucket_hints: list[StyleBucketHint]
     evidence_index: list[StyleEvidenceRef]
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_model_omissions(cls, payload: Any) -> Any:
+        if not isinstance(payload, dict):
+            return payload
+        normalized = dict(payload)
+        normalized.setdefault("source_chapter_titles", [])
+        scalar_contracts = normalized.get("scalar_contracts")
+        if isinstance(scalar_contracts, dict):
+            normalized_scalars = dict(scalar_contracts)
+            for key in ("perspective", "distance", "temporality", "inner_monologue_mode"):
+                if not str(normalized_scalars.get(key, "") or "").strip():
+                    normalized_scalars[key] = "unspecified"
+            if str(normalized_scalars.get("perspective", "") or "").strip().casefold() == "mixed":
+                normalized_scalars["perspective"] = "multi_pov"
+            normalized["scalar_contracts"] = normalized_scalars
+        return normalized
+
     @model_validator(mode="after")
     def _ensure_non_empty_content(self) -> "StyleWindowSignalResult":
         signal_lists = (
@@ -396,6 +414,61 @@ def _derive_rule_item_text(payload: dict[str, Any]) -> str:
     return ""
 
 
+def _derive_trigger_constraint_from_text(text: Any) -> tuple[str, str]:
+    cleaned = _clean_model_text(text)
+    if not cleaned:
+        return "", ""
+    for marker, prefix in (
+        ("时，必须", "必须"),
+        ("时,必须", "必须"),
+        ("时，需", "需"),
+        ("时,需", "需"),
+        ("时，需要", "需要"),
+        ("时,需要", "需要"),
+        ("时，不能", "不能"),
+        ("时,不能", "不能"),
+        ("时，禁止", "禁止"),
+        ("时,禁止", "禁止"),
+    ):
+        if marker in cleaned:
+            left, right = cleaned.split(marker, 1)
+            trigger = f"{left}{marker[0]}".strip(" ，,；;")
+            constraint = f"{prefix}{right}".strip(" ，,；;")
+            if trigger and constraint:
+                return trigger, constraint
+    for separator in ("；", ";", "，", ","):
+        if separator in cleaned:
+            left, right = cleaned.split(separator, 1)
+            trigger = left.strip(" ，,；;")
+            constraint = right.strip(" ，,；;")
+            if trigger and constraint:
+                return trigger, constraint
+    return cleaned, cleaned
+
+
+def _repair_trigger_constraint_payload(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    payload = dict(value)
+    trigger = _clean_model_text(payload.get("trigger"))
+    constraint = _clean_model_text(payload.get("constraint"))
+    if trigger and constraint:
+        return payload
+    text = _clean_model_text(payload.get("text")) or _derive_rule_item_text(payload)
+    fallback_trigger, fallback_constraint = _derive_trigger_constraint_from_text(text)
+    if not trigger and fallback_trigger:
+        payload["trigger"] = fallback_trigger
+    if not constraint and fallback_constraint:
+        payload["constraint"] = fallback_constraint
+    return payload
+
+
+def _surface_path_enum(value: str | SurfacePath) -> SurfacePath:
+    if isinstance(value, SurfacePath):
+        return value
+    return SurfacePath(_clean_model_text(value))
+
+
 class StyleBibleRuleBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
@@ -443,6 +516,11 @@ class NarrativeRuleItem(StyleBibleRuleBase):
     trigger: str
     constraint: str
 
+    @model_validator(mode="before")
+    @classmethod
+    def _repair_missing_trigger_constraint(cls, value: Any) -> Any:
+        return _repair_trigger_constraint_payload(value)
+
     @model_validator(mode="after")
     def _validate_constraint_shape(self) -> "NarrativeRuleItem":
         if not _clean_model_text(self.trigger) or not _clean_model_text(self.constraint):
@@ -453,6 +531,11 @@ class NarrativeRuleItem(StyleBibleRuleBase):
 class WorldbookFactItem(StyleBibleRuleBase):
     trigger: str
     constraint: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _repair_missing_trigger_constraint(cls, value: Any) -> Any:
+        return _repair_trigger_constraint_payload(value)
 
     @model_validator(mode="after")
     def _validate_constraint_shape(self) -> "WorldbookFactItem":
@@ -500,9 +583,10 @@ class _LocalNarrativeRuleRow(NarrativeRuleItem):
 
     @model_validator(mode="after")
     def _validate_surface_path_contract(self) -> "_LocalNarrativeRuleRow":
-        spec = SURFACE_PATH_SPECS[self.surface_path]
+        surface_path = _surface_path_enum(self.surface_path)
+        spec = SURFACE_PATH_SPECS[surface_path]
         if spec.row_model != "NarrativeRuleItem":
-            raise ValueError(f"{self.surface_path.value} must use {spec.row_model}.")
+            raise ValueError(f"{surface_path.value} must use {spec.row_model}.")
         return self
 
 
@@ -511,9 +595,10 @@ class _LocalWorldbookFactRow(WorldbookFactItem):
 
     @model_validator(mode="after")
     def _validate_surface_path_contract(self) -> "_LocalWorldbookFactRow":
-        spec = SURFACE_PATH_SPECS[self.surface_path]
+        surface_path = _surface_path_enum(self.surface_path)
+        spec = SURFACE_PATH_SPECS[surface_path]
         if spec.row_model != "WorldbookFactItem":
-            raise ValueError(f"{self.surface_path.value} must use {spec.row_model}.")
+            raise ValueError(f"{surface_path.value} must use {spec.row_model}.")
         return self
 
 
@@ -522,9 +607,10 @@ class _LocalRoutingHintRow(RoutingHintItem):
 
     @model_validator(mode="after")
     def _validate_surface_path_contract(self) -> "_LocalRoutingHintRow":
-        spec = SURFACE_PATH_SPECS[self.surface_path]
+        surface_path = _surface_path_enum(self.surface_path)
+        spec = SURFACE_PATH_SPECS[surface_path]
         if spec.row_model != "RoutingHintItem":
-            raise ValueError(f"{self.surface_path.value} must use {spec.row_model}.")
+            raise ValueError(f"{surface_path.value} must use {spec.row_model}.")
         return self
 
 
@@ -533,9 +619,10 @@ class _LocalNegativeRuleRow(NegativeRuleItem):
 
     @model_validator(mode="after")
     def _validate_surface_path_contract(self) -> "_LocalNegativeRuleRow":
-        spec = SURFACE_PATH_SPECS[self.surface_path]
+        surface_path = _surface_path_enum(self.surface_path)
+        spec = SURFACE_PATH_SPECS[surface_path]
         if spec.row_model != "NegativeRuleItem":
-            raise ValueError(f"{self.surface_path.value} must use {spec.row_model}.")
+            raise ValueError(f"{surface_path.value} must use {spec.row_model}.")
         return self
 
 
@@ -544,16 +631,18 @@ class _LocalScalarRuleRow(ScalarRuleItem):
 
     @model_validator(mode="after")
     def _validate_surface_path_contract(self) -> "_LocalScalarRuleRow":
-        spec = SURFACE_PATH_SPECS[self.surface_path]
+        surface_path = _surface_path_enum(self.surface_path)
+        surface_path_value = surface_path.value
+        spec = SURFACE_PATH_SPECS[surface_path]
         if spec.row_model != "ScalarRuleItem":
-            raise ValueError(f"{self.surface_path.value} must use {spec.row_model}.")
-        scalar_spec = scalar_enum_spec_for_path(self.surface_path.value)
+            raise ValueError(f"{surface_path_value} must use {spec.row_model}.")
+        scalar_spec = scalar_enum_spec_for_path(surface_path_value)
         if scalar_spec is None:
             return self
-        canonical_value = _clean_model_text(canonicalize_scalar_value(self.surface_path.value, self.text))
+        canonical_value = _clean_model_text(canonicalize_scalar_value(surface_path_value, self.text))
         if canonical_value not in scalar_spec.allowed_values:
             raise ValueError(
-                f"ScalarRuleItem for {self.surface_path.value} must use one of {list(scalar_spec.allowed_values)}."
+                f"ScalarRuleItem for {surface_path_value} must use one of {list(scalar_spec.allowed_values)}."
             )
         self.text = canonical_value
         return self

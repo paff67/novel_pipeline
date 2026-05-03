@@ -13,6 +13,7 @@ from novel_pipeline_stable.models import (
     StyleBibleBucketBatchMemo,
     StyleBibleLocalPartialFinal,
     StyleBibleLocalReducerOutput,
+    StyleBibleRuleBase,
     local_rule_row_model_for_path,
 )
 from novel_pipeline_stable.prompting import load_prompt
@@ -559,6 +560,69 @@ def _build_surface_path_response_row_model(
     )
 
 
+def _build_multi_surface_path_response_row_model(
+    selected_paths: list[str],
+    *,
+    path_targets_by_path: dict[str, dict[str, Any]],
+) -> type[BaseModel]:
+    normalized_paths = _select_surface_paths(selected_paths)
+    suffix = _stable_model_suffix(*normalized_paths)
+    path_descriptions: list[str] = []
+    for path in normalized_paths:
+        target = path_targets_by_path.get(path, {})
+        downstream_shape = clean_text(target.get("downstream_shape"))
+        slot_lines = _slot_anchor_lines(target.get("slot_specs", []))
+        scalar_spec = scalar_enum_spec_for_path(path)
+        scalar_suffix = ""
+        if scalar_spec is not None:
+            scalar_suffix = "；allowed_values=" + "、".join(scalar_spec.allowed_values)
+        slot_suffix = ""
+        if slot_lines:
+            slot_suffix = "；slot_hints=" + "；".join(slot_lines)
+        if downstream_shape:
+            path_descriptions.append(f"{path} -> {downstream_shape}{slot_suffix}{scalar_suffix}")
+        else:
+            path_descriptions.append(f"{path}{slot_suffix}{scalar_suffix}")
+    path_hint = "；".join(path_descriptions)
+    empty_when_unused = "非当前 surface_path 适用字段请输出空字符串。"
+    return create_model(
+        f"PromptMultiSurfaceRuleRow{suffix}",
+        __base__=StyleBibleRuleBase,
+        surface_path=(
+            _literal_annotation(normalized_paths),
+            Field(..., description=f"只能选择本次允许的 canonical surface_path：{path_hint}。"),
+        ),
+        text=(
+            str,
+            Field(..., description="写成 grounded、可执行、可审计的规范句；标量路径必须使用提示中的 canonical token。"),
+        ),
+        trigger=(
+            str,
+            Field(default="", description=f"constraint/worldbook 路径的触发条件。{empty_when_unused}"),
+        ),
+        constraint=(
+            str,
+            Field(default="", description=f"constraint/worldbook 路径触发后的执行约束。{empty_when_unused}"),
+        ),
+        query_feature_matcher=(
+            str,
+            Field(default="", description=f"routing_hint 路径的查询特征匹配器。{empty_when_unused}"),
+        ),
+        route_target_action=(
+            str,
+            Field(default="", description=f"routing_hint 路径的路由动作。{empty_when_unused}"),
+        ),
+        forbidden_action=(
+            str,
+            Field(default="", description=f"negative 路径禁止的动作或写法。{empty_when_unused}"),
+        ),
+        correction_guideline=(
+            str,
+            Field(default="", description=f"negative 路径对应的纠偏指引。{empty_when_unused}"),
+        ),
+    )
+
+
 def _discriminated_rule_row_annotation(row_models: list[type[BaseModel]]) -> Any:
     if not row_models:
         raise ValueError("At least one response row model is required.")
@@ -576,11 +640,17 @@ def _build_prompt_response_model(
     selected_paths: list[str],
     path_targets_by_path: dict[str, dict[str, Any]],
 ) -> type[BaseModel]:
-    row_models = [
-        _build_surface_path_response_row_model(path, path_target=path_targets_by_path.get(path))
-        for path in selected_paths
-    ]
-    row_annotation = _discriminated_rule_row_annotation(row_models)
+    normalized_paths = _select_surface_paths(selected_paths)
+    if len(normalized_paths) == 1:
+        row_annotation = _build_surface_path_response_row_model(
+            normalized_paths[0],
+            path_target=path_targets_by_path.get(normalized_paths[0]),
+        )
+    else:
+        row_annotation = _build_multi_surface_path_response_row_model(
+            normalized_paths,
+            path_targets_by_path=path_targets_by_path,
+        )
     final_model_name = f"{model_name_prefix}Final{_stable_model_suffix(*selected_paths)}"
     final_model = create_model(
         final_model_name,

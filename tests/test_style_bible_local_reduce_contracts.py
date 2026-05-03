@@ -5,11 +5,14 @@ from types import SimpleNamespace
 
 from novel_pipeline_stable.api_clients import StableOpenAICompatibleStructuredClient
 from novel_pipeline_stable.models import (
+    NarrativeRuleItem,
+    StyleBibleBucketBatchMemo,
     StyleBibleLocalReducerOutput,
     StyleBibleReasoningBundle,
     StyleBibleReasoningEntry,
     validate_local_rule_row,
 )
+from novel_pipeline_stable.style_bible_prompt_assembler import _build_prompt_response_model
 
 
 def _client_stub() -> StableOpenAICompatibleStructuredClient:
@@ -96,6 +99,66 @@ class StyleBibleLocalReduceContractsTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             validate_local_rule_row(payload)
+
+    def test_narrative_rule_repairs_missing_trigger_and_constraint_from_text(self) -> None:
+        row = NarrativeRuleItem.model_validate(
+            {
+                "rule_id": "row_01",
+                "text": "当收益出现时，必须先结算债务。",
+                "_reasoning_ref": "reasoning_01",
+                "evidence_refs": ["scene:0001_001"],
+                "anti_pattern_codes": ["none"],
+            }
+        )
+
+        self.assertEqual(row.trigger, "当收益出现时")
+        self.assertEqual(row.constraint, "必须先结算债务。")
+
+    def test_local_rule_row_accepts_str_surface_path_in_dynamic_submodel(self) -> None:
+        response_model = _build_prompt_response_model(
+            model_name_prefix="LocalReduce",
+            selected_paths=["narrative_system.engine"],
+            path_targets_by_path={},
+        )
+        parsed = response_model.model_validate(
+            {
+                "reasoning": {
+                    "reasoning_version": "v2.0",
+                    "style_id": "style.demo",
+                    "scope": "novel",
+                    "entries": [
+                        {
+                            "reasoning_id": "reasoning_01",
+                            "bucket_id": "resource_pressure",
+                            "axis_ids": ["resource_pressure"],
+                            "claim": "收益先被结算截流。",
+                            "observed_commonality": "收益出现后立刻进入扣减。",
+                            "mechanism_inference": "资源压力通过账面结算制造。",
+                            "downstream_constraint": "必须写清先结算再受益。",
+                            "evidence_refs": ["scene:0001_001"],
+                            "anti_pattern_codes": ["none"],
+                        }
+                    ],
+                },
+                "final": {
+                    "style_id": "style.demo",
+                    "scope": "novel",
+                    "rule_rows": [
+                        {
+                            "rule_id": "row_01",
+                            "surface_path": "narrative_system.engine",
+                            "text": "当收益出现时，必须先结算债务。",
+                            "_reasoning_ref": "reasoning_01",
+                            "evidence_refs": ["scene:0001_001"],
+                            "anti_pattern_codes": ["none"],
+                        }
+                    ],
+                },
+            }
+        )
+
+        self.assertEqual(parsed.final.rule_rows[0].surface_path, "narrative_system.engine")
+        self.assertEqual(parsed.final.rule_rows[0].trigger, "当收益出现时")
 
     def test_local_reducer_output_rejects_dangling_reasoning_ref(self) -> None:
         row = _base_rule_row()
@@ -299,6 +362,31 @@ class StyleBibleLocalReduceContractsTest(unittest.TestCase):
         self.assertTrue(retryable)
         self.assertIsNone(status_code)
 
+    def test_timeout_errors_use_upstream_retry_bonus_budget(self) -> None:
+        self.assertTrue(
+            StableOpenAICompatibleStructuredClient._should_apply_upstream_retry_bonus(
+                status_code=None,
+                error_text="Responses stream exceeded 360s without completing.",
+            )
+        )
+
+    def test_gateway_524_uses_retry_and_upstream_bonus_budget(self) -> None:
+        class GatewayTimeoutError(Exception):
+            status_code = 524
+
+        retryable, status_code = StableOpenAICompatibleStructuredClient._classify_retryable(
+            GatewayTimeoutError("A timeout occurred at the gateway.")
+        )
+
+        self.assertTrue(retryable)
+        self.assertEqual(status_code, 524)
+        self.assertTrue(
+            StableOpenAICompatibleStructuredClient._should_apply_upstream_retry_bonus(
+                status_code=524,
+                error_text="A timeout occurred at the gateway.",
+            )
+        )
+
     def test_client_falls_back_from_stream_on_empty_json_contract_errors(self) -> None:
         self.assertTrue(
             StableOpenAICompatibleStructuredClient._should_fallback_responses_stream(
@@ -306,7 +394,128 @@ class StyleBibleLocalReduceContractsTest(unittest.TestCase):
             )
         )
 
+    def test_responses_stream_false_respects_config_until_gateway_requires_stream(self) -> None:
+        client = object.__new__(StableOpenAICompatibleStructuredClient)
+        client.project_config = SimpleNamespace(
+            model=SimpleNamespace(api_route="responses"),
+            stability=SimpleNamespace(stream=False),
+        )
+        client._gateways = [SimpleNamespace(index=0)]
+        client._preferred_gateway_index = 0
+        client._responses_force_stream_gateway_indices = set()
+        client._responses_non_stream_gateway_indices = set()
+
+        self.assertFalse(client._should_use_stream_for_request(gateway=client._gateways[0]))
+        client._responses_force_stream_gateway_indices.add(0)
+        self.assertTrue(client._should_use_stream_for_request(gateway=client._gateways[0]))
+
+    def test_responses_restore_stream_detects_gateway_body_text(self) -> None:
+        class GatewayBodyError(Exception):
+            status_code = 400
+            body = {"error": {"message": "stream must be set to true"}}
+
+        self.assertTrue(StableOpenAICompatibleStructuredClient._should_restore_responses_stream(GatewayBodyError("bad request")))
+
+    def test_style_bible_bucket_memo_response_format_uses_openai_strict_schema(self) -> None:
+        client = object.__new__(StableOpenAICompatibleStructuredClient)
+        client.project_config = SimpleNamespace(
+            model=SimpleNamespace(response_format="json_schema"),
+        )
+
+        response_format = StableOpenAICompatibleStructuredClient._build_response_format(
+            client,
+            StyleBibleBucketBatchMemo,
+            response_format_mode="json_schema",
+        )
+        schema = response_format["json_schema"]["schema"]
+        violations: list[str] = []
+
+        def visit(node: object, path: str) -> None:
+            if isinstance(node, list):
+                for index, item in enumerate(node):
+                    visit(item, f"{path}[{index}]")
+                return
+            if not isinstance(node, dict):
+                return
+            if node.get("type") == "object":
+                if node.get("additionalProperties") is not False:
+                    violations.append(f"{path}: additionalProperties is not false")
+                properties = node.get("properties")
+                if isinstance(properties, dict):
+                    required = set(node.get("required") or [])
+                    expected = set(properties.keys())
+                    if required != expected:
+                        violations.append(f"{path}: required does not match properties")
+            for key, value in node.items():
+                visit(value, f"{path}.{key}")
+
+        visit(schema, "$")
+        self.assertEqual(violations, [])
+
+    def test_local_reduce_multi_path_schema_avoids_one_of(self) -> None:
+        client = object.__new__(StableOpenAICompatibleStructuredClient)
+        client.project_config = SimpleNamespace(
+            model=SimpleNamespace(response_format="json_schema"),
+        )
+        response_model = _build_prompt_response_model(
+            model_name_prefix="LocalReduce",
+            selected_paths=["narrative_system.engine", "expression_system.dialogue_rules", "negative_rules"],
+            path_targets_by_path={},
+        )
+
+        response_format = StableOpenAICompatibleStructuredClient._build_response_format(
+            client,
+            response_model,
+            response_format_mode="json_schema",
+        )
+        schema_text = str(response_format["json_schema"]["schema"])
+
+        self.assertNotIn("oneOf", schema_text)
+
+    def test_invalid_json_schema_can_fallback_to_json_object_blueprint(self) -> None:
+        self.assertTrue(
+            StableOpenAICompatibleStructuredClient._should_fallback_json_schema_to_json_object(
+                status_code=400,
+                error_code="invalid_json_schema",
+                error_text="Invalid schema for response_format 'StyleBibleBucketBatchMemo'",
+            )
+        )
+
+    def test_responses_temperature_omission_drives_cache_signature(self) -> None:
+        client = object.__new__(StableOpenAICompatibleStructuredClient)
+        client.project_config = SimpleNamespace(
+            model=SimpleNamespace(api_route="responses", response_format="json_object", reasoning_effort=""),
+            stability=SimpleNamespace(local_request_cache_version="v1"),
+        )
+        decision_low = client._temperature_request_decision(0.1)
+        decision_high = client._temperature_request_decision(0.9)
+
+        self.assertIsNone(decision_low["temperature_sent"])
+        self.assertEqual(decision_low["temperature_omitted_reason"], "omitted_for_responses_compatibility")
+        self.assertEqual(decision_high["temperature_sent"], decision_low["temperature_sent"])
+
+        key_low = client._build_local_request_cache_key(
+            model_name="model",
+            response_model=StyleBibleLocalReducerOutput,
+            response_format={"type": "json_object"},
+            system_instruction="system",
+            user_content="{}",
+            temperature_sent=decision_low["temperature_sent"],
+            temperature_omitted_reason=decision_low["temperature_omitted_reason"],
+            max_output_tokens=128,
+        )
+        key_high = client._build_local_request_cache_key(
+            model_name="model",
+            response_model=StyleBibleLocalReducerOutput,
+            response_format={"type": "json_object"},
+            system_instruction="system",
+            user_content="{}",
+            temperature_sent=decision_high["temperature_sent"],
+            temperature_omitted_reason=decision_high["temperature_omitted_reason"],
+            max_output_tokens=128,
+        )
+        self.assertEqual(key_low, key_high)
+
 
 if __name__ == "__main__":
     unittest.main()
-

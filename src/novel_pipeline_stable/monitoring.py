@@ -243,8 +243,9 @@ class RunTracker:
     def record_skip(self, item: str, message: str, **fields: Any) -> None:
         self._record_outcome(outcome="skipped", item=item, message=message, level="warning", **fields)
 
-    def finish(self, message: str = "Run completed.", **fields: Any) -> None:
-        self.state["status"] = "completed"
+    def finish(self, message: str = "Run completed.", *, status: str = "completed", **fields: Any) -> None:
+        self.state.update(fields)
+        self.state["status"] = status
         self.state["finished_at"] = utc_timestamp()
         self.log(message, level="info", event="completed", **fields)
         self.state["progress_ratio"] = 1.0 if int(self.state.get("total_items", 0)) == 0 else self.state.get("progress_ratio", 0.0)
@@ -349,4 +350,3 @@ def read_run_detail(data_root: str | Path, relative_output_dir: str, *, log_limi
         "logs": read_log_tail(run_dir, limit=log_limit),
         "failures": read_failures_preview(run_dir, limit=failure_limit),
     }
-

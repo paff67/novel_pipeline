@@ -146,12 +146,30 @@ class HybridRetrieverTest(unittest.TestCase):
             self.assertTrue(style_result.route_debug["matched_vocab_ids"])
             self.assertTrue(style_result.merged_hits)
             self.assertEqual(style_result.merged_hits[0].lane, "style")
+            self.assertEqual(style_result.world_hits, [])
+            self.assertIn("world", style_result.route_debug["skipped_lanes"])
 
             self.assertEqual(world_result.route_decision, "world")
             self.assertEqual(world_result.route_debug["final_decision_source"], "lexical_prior")
             self.assertTrue(world_result.route_debug["matched_vocab_ids"])
             self.assertTrue(world_result.merged_hits)
             self.assertEqual(world_result.merged_hits[0].lane, "world")
+            self.assertEqual(world_result.style_hits, [])
+            self.assertIn("style", world_result.route_debug["skipped_lanes"])
+
+    def test_single_route_does_not_require_non_target_lane(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            style_dir, _world_dir = self._prepare_assets(root)
+            missing_world_dir = root / "missing_world_graph"
+            retriever = HybridRetriever(style_dir, missing_world_dir)
+
+            result = retriever.retrieve("这种审批通知应该怎么写，语气要冷面一点", top_k=3, route_override="style")
+
+            self.assertEqual(result.route_decision, "style")
+            self.assertTrue(result.merged_hits)
+            self.assertEqual(result.world_hits, [])
+            self.assertIn("world", result.route_debug["skipped_lanes"])
 
     def test_run_hybrid_retrieval_probe_writes_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

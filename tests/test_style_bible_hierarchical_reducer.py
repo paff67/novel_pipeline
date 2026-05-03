@@ -36,6 +36,7 @@ from novel_pipeline_stable.style_bible_reduction import (
     _target_scalar_candidates,
     reduce_style_bible_from_bucket_memos,
 )
+from novel_pipeline_stable.style_bible_reduction.orchestrator import _select_count_expansion_slots
 
 
 class FakeStructuredClient:
@@ -1261,6 +1262,145 @@ class StyleBibleHierarchicalReducerTest(unittest.TestCase):
         self.assertGreater(filter_trace["candidates"][0]["combined_score"], 0.0)
         self.assertGreater(filter_trace["candidates"][0]["evidence_overlap_score"], 0.0)
 
+    def test_count_expansion_slots_allow_densify_when_slots_are_covered_but_count_is_low(self) -> None:
+        path_target = SectionPathTarget(
+            path="narrative_system.pacing_rules",
+            target_count=4,
+            max_new_rows=2,
+            retrieval_top_k=4,
+            downstream_shape="pacing rules",
+            slot_match_threshold=0.7,
+            soft_slot_match_floor=0.6,
+            slot_specs=(
+                SectionSlotSpec(
+                    slot_id="approval_delay",
+                    label="Approval Delay",
+                    cue="approval delay",
+                    canonical_description="Pacing stalls on approval.",
+                ),
+                SectionSlotSpec(
+                    slot_id="repayment_countdown",
+                    label="Repayment Countdown",
+                    cue="repayment countdown",
+                    canonical_description="Pacing tightens around repayment.",
+                ),
+            ),
+        )
+
+        slots = _select_count_expansion_slots(
+            path_target,
+            slot_coverage_trace=[
+                {"slot_id": "approval_delay", "best_score": 0.91},
+                {"slot_id": "repayment_countdown", "best_score": 0.83},
+            ],
+            deficit=3,
+        )
+
+        self.assertEqual([slot.slot_id for slot in slots], ["repayment_countdown", "approval_delay"])
+
+    def test_global_merge_keeps_distinct_negative_rules_instead_of_empty_alias_merge(self) -> None:
+        prompt_dir = Path(__file__).resolve().parents[1] / "prompts"
+        config = _config(prompt_dir, critical_buckets=["dark_humor", "resource_pressure"], hard_cap=4)
+        source_bundle = {
+            "style_bible_id_hint": "style.demo",
+            "scope_hint": "novel",
+            "story_node_scope": {},
+        }
+        base_targets = load_style_bible_section_targets()
+        custom_targets = replace(
+            base_targets,
+            repair_max_rounds=0,
+            densify_enabled=False,
+            minimums={"negative_rules": 2},
+            path_targets={},
+        )
+        FakeStructuredClient.call_count = 0
+        FakeStructuredClient.responses = [
+            _structured_reducer_response(
+                reasoning_entries=[
+                    {
+                        "reasoning_id": "dark_humor_reasoning",
+                        "bucket_id": "dark_humor",
+                        "axis_ids": ["dark_humor"],
+                        "claim": "Deadpan humor must not become broad comedy labels.",
+                        "observed_commonality": "Scenes use dry notices rather than loud punchlines.",
+                        "mechanism_inference": "Keep humor tied to operational wording.",
+                        "downstream_constraint": "Ban loud punchlines.",
+                        "evidence_refs": ["scene:0001_001"],
+                        "anti_pattern_codes": ["none"],
+                    }
+                ],
+                rule_rows=[
+                    {
+                        "surface_path": "negative_rules",
+                        "rule_id": "dark_humor_negative",
+                        "text": "Do not explain the joke as generic absurdity when a notice, price, or service phrase is doing the comic work.",
+                        "forbidden_action": "Replace the procedural joke with a broad absurdity label.",
+                        "correction_guideline": "Name the notice, price, or service phrase that creates the deadpan mismatch.",
+                        "_reasoning_ref": "dark_humor_reasoning",
+                        "evidence_refs": ["scene:0001_001"],
+                    }
+                ],
+                elapsed_seconds=1.0,
+            ),
+            _structured_reducer_response(
+                reasoning_entries=[
+                    {
+                        "reasoning_id": "resource_pressure_reasoning",
+                        "bucket_id": "resource_pressure",
+                        "axis_ids": ["resource_pressure"],
+                        "claim": "Debt pressure must not collapse into vague suffering.",
+                        "observed_commonality": "Scenes keep naming repayment and settlement mechanics.",
+                        "mechanism_inference": "Keep hardship tied to payable mechanisms.",
+                        "downstream_constraint": "Ban vague angst.",
+                        "evidence_refs": ["scene:0002_001"],
+                        "anti_pattern_codes": ["none"],
+                    }
+                ],
+                rule_rows=[
+                    {
+                        "surface_path": "negative_rules",
+                        "rule_id": "resource_pressure_negative",
+                        "text": "Do not flatten debt, repayment, or shortage pressure into vague misery when a payable item is driving the scene.",
+                        "forbidden_action": "Describe pressure as vague misery without the payable item.",
+                        "correction_guideline": "Name the debt amount, repayment window, settlement order, or renewed bill.",
+                        "_reasoning_ref": "resource_pressure_reasoning",
+                        "evidence_refs": ["scene:0002_001"],
+                    }
+                ],
+                elapsed_seconds=1.0,
+            ),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "novel_pipeline_stable.style_bible_reduction.orchestrator.StableOpenAICompatibleStructuredClient",
+                FakeStructuredClient,
+            ), patch(
+                "novel_pipeline_stable.style_bible_reduction.orchestrator.load_style_bible_section_targets",
+                return_value=custom_targets,
+            ):
+                result = reduce_style_bible_from_bucket_memos(
+                    config,
+                    source_bundle,
+                    [
+                        _bucket_memo("dark_humor", "scene:0001_001"),
+                        _bucket_memo("resource_pressure", "scene:0002_001"),
+                    ],
+                    Path(tmpdir),
+                )
+
+        negative_rules = result.record["negative_rules"]
+        self.assertEqual(len(negative_rules), 2)
+        merge_events = [
+            row for row in result.reduce_trace["merge_events"]
+            if row["surface_path"] == "negative_rules"
+        ]
+        self.assertFalse(
+            any(row["group_key"] == "|" for row in merge_events),
+            merge_events,
+        )
+
     def test_hierarchical_reduce_section_densify_keeps_only_semantic_increment(self) -> None:
         prompt_dir = Path(__file__).resolve().parents[1] / "prompts"
         config = _config(prompt_dir, critical_buckets=["institutional_pipeline"], hard_cap=4)
@@ -1497,4 +1637,3 @@ class StyleBibleHierarchicalReducerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

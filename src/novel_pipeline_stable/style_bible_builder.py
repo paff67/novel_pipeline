@@ -11,6 +11,7 @@ from novel_pipeline_stable.config import StableProjectConfig
 from novel_pipeline_stable.io_utils import ensure_dir, read_json, read_jsonl, write_json
 from novel_pipeline_stable.models import (
     StyleBibleBatchPlan,
+    StyleBibleResultV2,
     StyleBibleRoutedIndex,
 )
 from novel_pipeline_stable.monitoring import RunTracker
@@ -47,6 +48,7 @@ from novel_pipeline_stable.style_eval_contract import (
     build_style_bible_run_manifest,
     build_style_id,
     file_sha256,
+    sha256_payload,
     utc_iso_from_timestamp,
     utc_now_iso,
 )
@@ -97,6 +99,86 @@ class StyleBiblePhaseArtifacts:
     sampling_mode: str
     routing_mode: str
     batching_mode: str
+
+
+@dataclass(slots=True)
+class StyleBibleResumeValidation:
+    valid: bool
+    reason: str = ""
+    run_manifest: dict[str, Any] | None = None
+    legacy_without_fingerprint: bool = False
+
+
+def _style_bible_config_fingerprint_payload(
+    config: StableProjectConfig,
+    *,
+    max_style_windows: int,
+    max_scene_samples: int,
+    max_plot_nodes: int,
+    max_chapter_summaries: int,
+    max_entity_samples: int,
+    routing_rules_config: str | Path | None,
+    batching_rules_config: str | Path | None,
+    bucket_build_concurrency: int | None,
+) -> dict[str, Any]:
+    routing_path = Path(routing_rules_config).resolve() if routing_rules_config else None
+    batching_path = Path(batching_rules_config).resolve() if batching_rules_config else None
+    return {
+        "api_route": config.model.api_route,
+        "model": _style_bible_model_name(config),
+        "temperature": config.model.style_bible_temperature
+        if config.model.style_bible_temperature is not None
+        else config.model.style_temperature,
+        "max_output_tokens": config.model.style_bible_max_output_tokens
+        if config.model.style_bible_max_output_tokens is not None
+        else config.model.style_max_output_tokens,
+        "response_format": config.model.response_format,
+        "max_style_windows": int(max_style_windows),
+        "max_scene_samples": int(max_scene_samples),
+        "max_plot_nodes": int(max_plot_nodes),
+        "max_chapter_summaries": int(max_chapter_summaries),
+        "max_entity_samples": int(max_entity_samples),
+        "routing_rules_config": str(routing_path) if routing_path else "",
+        "routing_rules_sha256": file_sha256(routing_path) if routing_path else "",
+        "batching_rules_config": str(batching_path) if batching_path else "",
+        "batching_rules_sha256": file_sha256(batching_path) if batching_path else "",
+        "bucket_build_concurrency": int(bucket_build_concurrency or 0),
+    }
+
+
+def _style_bible_artifact_fingerprint(
+    config: StableProjectConfig,
+    *,
+    source_bundle: dict[str, Any],
+    max_style_windows: int,
+    max_scene_samples: int,
+    max_plot_nodes: int,
+    max_chapter_summaries: int,
+    max_entity_samples: int,
+    routing_rules_config: str | Path | None,
+    batching_rules_config: str | Path | None,
+    bucket_build_concurrency: int | None,
+) -> dict[str, Any]:
+    payload = {
+        "version": "artifact-fingerprint-v1",
+        "kind": "style_bible",
+        "input_sha256": sha256_payload(source_bundle),
+        "config_sha256": sha256_payload(
+            _style_bible_config_fingerprint_payload(
+                config,
+                max_style_windows=max_style_windows,
+                max_scene_samples=max_scene_samples,
+                max_plot_nodes=max_plot_nodes,
+                max_chapter_summaries=max_chapter_summaries,
+                max_entity_samples=max_entity_samples,
+                routing_rules_config=routing_rules_config,
+                batching_rules_config=batching_rules_config,
+                bucket_build_concurrency=bucket_build_concurrency,
+            )
+        ),
+    }
+    payload["sha256"] = sha256_payload(payload)
+    return payload
 
 
 def _selection_limits_payload(
@@ -596,6 +678,90 @@ def _chapter_sort_key(value: Any) -> tuple[int, Any]:
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _validate_existing_style_bible_resume(
+    config: StableProjectConfig,
+    *,
+    facts_dir: str | Path,
+    style_dir: str | Path,
+    canon_dir: str | Path,
+    output_dir: Path,
+    final_output_path: Path,
+    max_style_windows: int,
+    max_scene_samples: int,
+    max_plot_nodes: int,
+    max_chapter_summaries: int,
+    max_entity_samples: int,
+    routing_rules_config: str | Path | None,
+    batching_rules_config: str | Path | None,
+    bucket_build_concurrency: int | None,
+) -> StyleBibleResumeValidation:
+    source_bundle_path = output_dir / "style_bible_source_bundle.json"
+    if not source_bundle_path.exists():
+        return StyleBibleResumeValidation(False, "missing_source_bundle")
+    try:
+        style_bible_payload = read_json(final_output_path)
+        source_bundle = read_json(source_bundle_path)
+    except Exception as exc:  # noqa: BLE001
+        return StyleBibleResumeValidation(False, f"invalid_json:{type(exc).__name__}")
+    if not isinstance(style_bible_payload, dict):
+        return StyleBibleResumeValidation(False, "style_bible_not_object")
+    if not isinstance(source_bundle, dict):
+        return StyleBibleResumeValidation(False, "source_bundle_not_object")
+    try:
+        StyleBibleResultV2.model_validate(style_bible_payload)
+    except Exception as exc:  # noqa: BLE001
+        return StyleBibleResumeValidation(False, f"schema_invalid:{type(exc).__name__}")
+
+    expected_fingerprint = _style_bible_artifact_fingerprint(
+        config,
+        source_bundle=source_bundle,
+        max_style_windows=max_style_windows,
+        max_scene_samples=max_scene_samples,
+        max_plot_nodes=max_plot_nodes,
+        max_chapter_summaries=max_chapter_summaries,
+        max_entity_samples=max_entity_samples,
+        routing_rules_config=routing_rules_config,
+        batching_rules_config=batching_rules_config,
+        bucket_build_concurrency=bucket_build_concurrency,
+    )
+    legacy_without_fingerprint = False
+    artifact_fingerprint = style_bible_payload.get("artifact_fingerprint")
+    if artifact_fingerprint:
+        if artifact_fingerprint != expected_fingerprint:
+            return StyleBibleResumeValidation(False, "artifact_fingerprint_mismatch")
+    else:
+        legacy_without_fingerprint = True
+
+    run_manifest_path = output_dir / RUN_MANIFEST_FILE
+    if not run_manifest_path.exists():
+        return StyleBibleResumeValidation(True, "legacy_without_run_manifest", None, True)
+    try:
+        run_manifest = read_json(run_manifest_path)
+    except Exception as exc:  # noqa: BLE001
+        return StyleBibleResumeValidation(False, f"run_manifest_invalid_json:{type(exc).__name__}")
+    if not isinstance(run_manifest, dict):
+        return StyleBibleResumeValidation(False, "run_manifest_not_object")
+    input_dirs = run_manifest.get("input_dirs", {})
+    if not isinstance(input_dirs, dict):
+        return StyleBibleResumeValidation(False, "run_manifest_missing_input_dirs")
+    expected_dirs = {
+        "facts_dir": str(Path(facts_dir).resolve()),
+        "style_dir": str(Path(style_dir).resolve()),
+        "canon_dir": str(Path(canon_dir).resolve()),
+    }
+    for key, expected in expected_dirs.items():
+        if _clean_text(input_dirs.get(key)) != expected:
+            return StyleBibleResumeValidation(False, f"run_manifest_{key}_mismatch")
+    hashes = run_manifest.get("hashes", {})
+    if not isinstance(hashes, dict):
+        return StyleBibleResumeValidation(False, "run_manifest_missing_hashes")
+    if _clean_text(hashes.get("style_bible_sha256")) != sha256_payload(style_bible_payload):
+        return StyleBibleResumeValidation(False, "style_bible_hash_mismatch")
+    if _clean_text(hashes.get("source_bundle_sha256")) != sha256_payload(source_bundle):
+        return StyleBibleResumeValidation(False, "source_bundle_hash_mismatch")
+    return StyleBibleResumeValidation(True, run_manifest=run_manifest, legacy_without_fingerprint=legacy_without_fingerprint)
 
 
 def _load_story_node_scope(canon_dir: str | Path) -> dict[str, Any] | None:
@@ -2287,6 +2453,18 @@ def build_style_bible(
     record = reduce_result.record
     style_id = build_style_id(output_path, story_node_scope=story_node_scope if isinstance(story_node_scope, dict) else {})
     record["style_id"] = style_id
+    record["artifact_fingerprint"] = _style_bible_artifact_fingerprint(
+        config,
+        source_bundle=source_bundle,
+        max_style_windows=max_style_windows,
+        max_scene_samples=max_scene_samples,
+        max_plot_nodes=max_plot_nodes,
+        max_chapter_summaries=max_chapter_summaries,
+        max_entity_samples=max_entity_samples,
+        routing_rules_config=routing_rules_config,
+        batching_rules_config=batching_rules_config,
+        bucket_build_concurrency=bucket_build_concurrency,
+    )
     reasoning_record = dict(reduce_result.reasoning_record)
     reasoning_record["style_id"] = style_id
     export_flat_record = dict(reduce_result.export_flat_record)
@@ -2492,60 +2670,94 @@ def run_style_bible_build(
     }
 
     if resume and final_output_path.exists():
-        existing_row = manifest_by_key.get("style_bible", {})
-        run_manifest = _backfill_existing_run_manifest(
+        resume_validation = _validate_existing_style_bible_resume(
             config,
             facts_dir=facts_dir,
             style_dir=style_dir,
             canon_dir=canon_dir,
             output_dir=output_path,
-            story_node_scope=story_node_scope,
-            manifest_row=existing_row if isinstance(existing_row, dict) else {},
+            final_output_path=final_output_path,
+            max_style_windows=max_style_windows,
+            max_scene_samples=max_scene_samples,
+            max_plot_nodes=max_plot_nodes,
+            max_chapter_summaries=max_chapter_summaries,
+            max_entity_samples=max_entity_samples,
+            routing_rules_config=routing_rules_config,
+            batching_rules_config=batching_rules_config,
+            bucket_build_concurrency=bucket_build_concurrency,
         )
-        source_bundle_path = output_path / "style_bible_source_bundle.json"
-        routed_index_path = output_path / ROUTED_INDEX_FILE
-        batch_plan_path = output_path / BATCH_PLAN_FILE
-        sampling_report_path = output_path / SAMPLING_REPORT_FILE
-        source_bundle = read_json(source_bundle_path) if source_bundle_path.exists() else {}
-        routed_index = read_json(routed_index_path) if routed_index_path.exists() else {}
-        batch_plan = read_json(batch_plan_path) if batch_plan_path.exists() else {}
-        failures_by_key.pop("style_bible", None)
-        manifest_by_key["style_bible"] = {
-            "build_id": "style_bible",
-            "output_file": final_output_path.name,
-            "reasoning_file": "style_bible_reasoning.json" if (output_path / "style_bible_reasoning.json").exists() else "",
-            "export_flat_file": "style_bible_export_flat.json" if (output_path / "style_bible_export_flat.json").exists() else "",
-            "source_bundle_file": source_bundle_path.name if source_bundle_path.exists() else "",
-            "routed_index_file": routed_index_path.name if routed_index_path.exists() else "",
-            "batch_plan_file": batch_plan_path.name if batch_plan_path.exists() else "",
-            "sampling_report_file": sampling_report_path.name if sampling_report_path.exists() else "",
-            "bucket_memo_dir": BUCKET_MEMO_DIR if (output_path / BUCKET_MEMO_DIR).exists() else "",
-            "reduce_trace_file": REDUCE_TRACE_FILE if (output_path / REDUCE_TRACE_FILE).exists() else "",
-            "status": "skipped_existing",
-            "story_node_scope": story_node_scope or {},
-            "run_id": run_manifest.get("run_id", "") if isinstance(run_manifest, dict) else "",
-            "style_id": run_manifest.get("style_id", "") if isinstance(run_manifest, dict) else "",
-            "run_manifest_file": RUN_MANIFEST_FILE if isinstance(run_manifest, dict) else "",
-            "scope": run_manifest.get("scope", "") if isinstance(run_manifest, dict) else "",
-            "model": _style_bible_model_name(config),
-            "sampling_mode": run_manifest.get("sampling_mode", "") if isinstance(run_manifest, dict) else "",
-            "routing_mode": run_manifest.get("routing_mode", "") if isinstance(run_manifest, dict) else "",
-            "batching_mode": run_manifest.get("batching_mode", "") if isinstance(run_manifest, dict) else "",
-            "usage_metadata": run_manifest.get("usage_metadata", {}) if isinstance(run_manifest, dict) else {},
-            "request_metrics": run_manifest.get("request_metrics", {}) if isinstance(run_manifest, dict) else {},
-            "sampling": source_bundle.get("sampling", {}) if isinstance(source_bundle, dict) else {},
-            "corpus_stats": source_bundle.get("corpus_stats", {}) if isinstance(source_bundle, dict) else {},
-            "routed_coverage_summary": routed_index.get("coverage_summary", {}) if isinstance(routed_index, dict) else {},
-            "batch_coverage_summary": batch_plan.get("coverage_summary", {}) if isinstance(batch_plan, dict) else {},
-        }
-        _write_tracking_files(manifest_path, manifest_by_key, failures_path, failures_by_key)
-        tracker.record_skip("style_bible", f"Skipped existing output for {final_output_path.name}.", file_name=final_output_path.name)
-        tracker.finish(
-            "Stable style bible build skipped.",
-            output_file=str(final_output_path.resolve()),
-            node_id=story_node_scope.get("node_id", "") if story_node_scope else "",
-        )
-        return None
+        if not resume_validation.valid:
+            tracker.log(
+                f"Existing style bible output will be regenerated: {resume_validation.reason}",
+                level="warning",
+                event="resume_invalid",
+                item="style_bible",
+                reason=resume_validation.reason,
+            )
+        else:
+            if resume_validation.legacy_without_fingerprint:
+                tracker.log(
+                    "Skipped legacy style bible output without a complete fingerprint/run manifest.",
+                    level="warning",
+                    event="resume_legacy_without_fingerprint",
+                    item="style_bible",
+                )
+            existing_row = manifest_by_key.get("style_bible", {})
+            run_manifest = resume_validation.run_manifest or _backfill_existing_run_manifest(
+                config,
+                facts_dir=facts_dir,
+                style_dir=style_dir,
+                canon_dir=canon_dir,
+                output_dir=output_path,
+                story_node_scope=story_node_scope,
+                manifest_row=existing_row if isinstance(existing_row, dict) else {},
+            )
+            source_bundle_path = output_path / "style_bible_source_bundle.json"
+            routed_index_path = output_path / ROUTED_INDEX_FILE
+            batch_plan_path = output_path / BATCH_PLAN_FILE
+            sampling_report_path = output_path / SAMPLING_REPORT_FILE
+            source_bundle = read_json(source_bundle_path) if source_bundle_path.exists() else {}
+            routed_index = read_json(routed_index_path) if routed_index_path.exists() else {}
+            batch_plan = read_json(batch_plan_path) if batch_plan_path.exists() else {}
+            final_payload = read_json(final_output_path) if final_output_path.exists() else {}
+            failures_by_key.pop("style_bible", None)
+            manifest_by_key["style_bible"] = {
+                "build_id": "style_bible",
+                "output_file": final_output_path.name,
+                "reasoning_file": "style_bible_reasoning.json" if (output_path / "style_bible_reasoning.json").exists() else "",
+                "export_flat_file": "style_bible_export_flat.json" if (output_path / "style_bible_export_flat.json").exists() else "",
+                "source_bundle_file": source_bundle_path.name if source_bundle_path.exists() else "",
+                "routed_index_file": routed_index_path.name if routed_index_path.exists() else "",
+                "batch_plan_file": batch_plan_path.name if batch_plan_path.exists() else "",
+                "sampling_report_file": sampling_report_path.name if sampling_report_path.exists() else "",
+                "bucket_memo_dir": BUCKET_MEMO_DIR if (output_path / BUCKET_MEMO_DIR).exists() else "",
+                "reduce_trace_file": REDUCE_TRACE_FILE if (output_path / REDUCE_TRACE_FILE).exists() else "",
+                "status": "skipped_existing",
+                "story_node_scope": story_node_scope or {},
+                "run_id": run_manifest.get("run_id", "") if isinstance(run_manifest, dict) else "",
+                "style_id": run_manifest.get("style_id", "") if isinstance(run_manifest, dict) else "",
+                "run_manifest_file": RUN_MANIFEST_FILE if isinstance(run_manifest, dict) else "",
+                "scope": run_manifest.get("scope", "") if isinstance(run_manifest, dict) else "",
+                "model": _style_bible_model_name(config),
+                "sampling_mode": run_manifest.get("sampling_mode", "") if isinstance(run_manifest, dict) else "",
+                "routing_mode": run_manifest.get("routing_mode", "") if isinstance(run_manifest, dict) else "",
+                "batching_mode": run_manifest.get("batching_mode", "") if isinstance(run_manifest, dict) else "",
+                "usage_metadata": run_manifest.get("usage_metadata", {}) if isinstance(run_manifest, dict) else {},
+                "request_metrics": run_manifest.get("request_metrics", {}) if isinstance(run_manifest, dict) else {},
+                "sampling": source_bundle.get("sampling", {}) if isinstance(source_bundle, dict) else {},
+                "corpus_stats": source_bundle.get("corpus_stats", {}) if isinstance(source_bundle, dict) else {},
+                "routed_coverage_summary": routed_index.get("coverage_summary", {}) if isinstance(routed_index, dict) else {},
+                "batch_coverage_summary": batch_plan.get("coverage_summary", {}) if isinstance(batch_plan, dict) else {},
+                "artifact_fingerprint": final_payload.get("artifact_fingerprint", {}) if isinstance(final_payload, dict) else {},
+            }
+            _write_tracking_files(manifest_path, manifest_by_key, failures_path, failures_by_key)
+            tracker.record_skip("style_bible", f"Skipped existing output for {final_output_path.name}.", file_name=final_output_path.name)
+            tracker.finish(
+                "Stable style bible build skipped.",
+                output_file=str(final_output_path.resolve()),
+                node_id=story_node_scope.get("node_id", "") if story_node_scope else "",
+            )
+            return None
 
     try:
         result = build_style_bible(
@@ -2591,6 +2803,7 @@ def run_style_bible_build(
             "routed_coverage_summary": result.routed_index.get("coverage_summary", {}),
             "batch_coverage_summary": result.batch_plan.get("coverage_summary", {}),
             "story_node_scope": result.story_node_scope or {},
+            "artifact_fingerprint": result.record.get("artifact_fingerprint", {}),
         }
         failures_by_key.pop("style_bible", None)
         _write_tracking_files(manifest_path, manifest_by_key, failures_path, failures_by_key)
@@ -2626,4 +2839,3 @@ def run_style_bible_build(
         tracker.record_failure("style_bible", f"Style bible build failed: {exc}", error_type=type(exc).__name__)
         tracker.fail_run(f"Stable style bible build aborted: {exc}", error_type=type(exc).__name__)
         raise
-

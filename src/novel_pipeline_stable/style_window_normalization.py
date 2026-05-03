@@ -23,6 +23,7 @@ LEGACY_STYLE_WINDOW_KEYS = frozenset(
         "supporting_evidence",
     }
 )
+RUNTIME_STYLE_WINDOW_METADATA_KEYS = frozenset({"artifact_fingerprint"})
 
 
 def _clean_text(value: Any) -> str:
@@ -305,12 +306,15 @@ def legacy_style_window_to_v2(payload: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_style_window_payload(payload: dict[str, Any], *, source_path: Path | None = None) -> dict[str, Any]:
     source_label = str(source_path) if source_path is not None else "<memory>"
+    validation_payload = dict(payload)
+    for key in RUNTIME_STYLE_WINDOW_METADATA_KEYS:
+        validation_payload.pop(key, None)
     try:
-        parsed = StyleWindowSignalResult.model_validate(payload)
+        parsed = StyleWindowSignalResult.model_validate(validation_payload)
         return parsed.model_dump(mode="json")
     except Exception as exc:  # noqa: BLE001
-        if not is_legacy_style_window_payload(payload):
-            schema_version = _clean_text(payload.get("schema_version"))
+        if not is_legacy_style_window_payload(validation_payload):
+            schema_version = _clean_text(validation_payload.get("schema_version"))
             if schema_version != STYLE_WINDOW_SIGNAL_SCHEMA_VERSION:
                 raise ValueError(
                     f"Unsupported style window schema in {source_label}. "
@@ -318,7 +322,7 @@ def normalize_style_window_payload(payload: dict[str, Any], *, source_path: Path
                 ) from exc
             raise ValueError(f"Invalid style window payload in {source_label}: {exc}") from exc
 
-    normalized_payload = legacy_style_window_to_v2(payload)
+    normalized_payload = legacy_style_window_to_v2(validation_payload)
     try:
         parsed = StyleWindowSignalResult.model_validate(normalized_payload)
     except Exception as exc:  # noqa: BLE001

@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import random
@@ -14,6 +15,10 @@ from urllib.parse import urlsplit
 
 import httpx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
+try:
+    from openai.lib._pydantic import to_strict_json_schema as _openai_to_strict_json_schema
+except Exception:  # noqa: BLE001
+    _openai_to_strict_json_schema = None
 from pydantic import BaseModel, ValidationError
 
 from novel_pipeline_stable.io_utils import ensure_dir
@@ -38,7 +43,8 @@ TRANSIENT_400_MARKERS = (
     "timed out",
     "timeout",
 )
-UPSTREAM_RETRY_BONUS_STATUSES = {408, 429, 500, 502, 503, 504}
+UPSTREAM_RETRY_BONUS_STATUSES = {408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
+RETRYABLE_HTTP_STATUSES = UPSTREAM_RETRY_BONUS_STATUSES | {409}
 ERROR_BODY_EXCERPT_LIMIT = 800
 RAW_ARTIFACT_PATH_LIMIT = 240
 
@@ -86,6 +92,14 @@ class CachedStructuredResponse:
     cache_path: Path
 
 
+@dataclass(slots=True)
+class ResponsesRequestBuild:
+    request_kwargs: dict[str, Any]
+    temperature_requested: float
+    temperature_sent: float | None
+    temperature_omitted_reason: str
+
+
 class StructuredGenerationError(RuntimeError):
     def __init__(self, message: str, *, request_metrics: dict[str, Any]):
         super().__init__(message)
@@ -130,6 +144,7 @@ class StableOpenAICompatibleStructuredClient:
         self._preferred_gateway_index = 0
         self._disabled_gateway_indices: set[int] = set()
         self._responses_non_stream_gateway_indices: set[int] = set()
+        self._responses_force_stream_gateway_indices: set[int] = set()
 
     def generate_structured(
         self,
@@ -156,18 +171,32 @@ class StableOpenAICompatibleStructuredClient:
             response_format_mode=response_format_mode,
             output_contract_mode=output_contract_mode,
         )
+        effective_response_format_mode = response_format_mode or self.project_config.model.response_format
+        effective_output_contract_mode = output_contract_mode or "auto"
+        if effective_output_contract_mode == "auto":
+            effective_output_contract_mode = (
+                "none" if effective_response_format_mode == "json_schema" else "blueprint"
+            )
         user_content = self._dumps_json(user_payload)
         response_format = self._build_response_format(
             response_model,
             response_format_mode=response_format_mode,
         )
+        active_system_instruction = effective_system_instruction
+        active_response_format = response_format
+        active_response_format_mode = effective_response_format_mode
+        active_output_contract_mode = effective_output_contract_mode
+        temperature_decision = self._temperature_request_decision(temperature)
         cache_key = self._build_local_request_cache_key(
             model_name=model_name,
             response_model=response_model,
-            response_format=response_format,
-            system_instruction=effective_system_instruction,
+            response_format=active_response_format,
+            response_format_mode=active_response_format_mode,
+            output_contract_mode=active_output_contract_mode,
+            system_instruction=active_system_instruction,
             user_content=user_content,
-            temperature=temperature,
+            temperature_sent=temperature_decision["temperature_sent"],
+            temperature_omitted_reason=temperature_decision["temperature_omitted_reason"],
             max_output_tokens=max_output_tokens,
         )
         request_metrics = {
@@ -175,8 +204,22 @@ class StableOpenAICompatibleStructuredClient:
             "model": model_name,
             "api_route": self.project_config.model.api_route,
             "reasoning_effort": self.project_config.model.reasoning_effort,
+            "response_format_mode_requested": response_format_mode or "",
+            "response_format_mode_effective": effective_response_format_mode,
+            "response_format_type": response_format.get("type"),
+            "json_schema_strict": bool(
+                ((response_format.get("json_schema") or {}) if isinstance(response_format, dict) else {}).get(
+                    "strict", False
+                )
+            ),
+            "output_contract_mode_requested": output_contract_mode or "",
+            "output_contract_mode_effective": effective_output_contract_mode,
+            "stream_config_requested": bool(self.project_config.stability.stream),
             "used_stream": use_stream,
             "transport_mode": self._build_transport_mode(use_stream),
+            "temperature_requested": temperature_decision["temperature_requested"],
+            "temperature_sent": temperature_decision["temperature_sent"],
+            "temperature_omitted_reason": temperature_decision["temperature_omitted_reason"],
             "attempts_per_gateway": attempts_per_gateway,
             "base_attempts": base_attempts,
             "upstream_retry_bonus_attempts": upstream_retry_bonus_attempts,
@@ -201,6 +244,9 @@ class StableOpenAICompatibleStructuredClient:
             "usage_metadata": {},
             "total_elapsed_seconds": 0.0,
             "retry_budget_used": False,
+            "schema_fallback_available": effective_response_format_mode == "json_schema",
+            "schema_fallback_used": False,
+            "schema_fallback_reason": "",
         }
         overall_started = time.perf_counter()
         cached_response = self._load_cached_structured_response(
@@ -266,11 +312,12 @@ class StableOpenAICompatibleStructuredClient:
                     gateway=gateway,
                     client=gateway.client,
                     model_name=model_name,
-                    system_instruction=effective_system_instruction,
+                    system_instruction=active_system_instruction,
                     user_content=user_content,
                     temperature=temperature,
                     max_output_tokens=max_output_tokens,
                     response_model=response_model,
+                    response_format=active_response_format,
                 )
 
                 raw_response_path = self._persist_raw_text(
@@ -342,6 +389,14 @@ class StableOpenAICompatibleStructuredClient:
                 request_metrics["repair_used"] = repair_used
                 request_metrics["used_stream"] = used_stream
                 request_metrics["transport_mode"] = self._build_transport_mode(used_stream)
+                request_metrics["response_format_mode_effective"] = active_response_format_mode
+                request_metrics["response_format_type"] = active_response_format.get("type")
+                request_metrics["json_schema_strict"] = bool(
+                    ((active_response_format.get("json_schema") or {}) if isinstance(active_response_format, dict) else {}).get(
+                        "strict", False
+                    )
+                )
+                request_metrics["output_contract_mode_effective"] = active_output_contract_mode
                 request_metrics["usage_metadata"] = usage
                 request_metrics["usage_summary"] = self._usage_summary(usage)
                 request_metrics["gateway_label"] = gateway.label
@@ -379,6 +434,7 @@ class StableOpenAICompatibleStructuredClient:
                 disable_gateway = self._should_disable_gateway_for_session(exc)
                 if self._use_responses_api() and not used_stream and self._should_restore_responses_stream(exc):
                     self._responses_non_stream_gateway_indices.discard(gateway.index)
+                    self._responses_force_stream_gateway_indices.add(gateway.index)
                     retryable = True
                 if disable_gateway:
                     self._disabled_gateway_indices.add(gateway.index)
@@ -388,13 +444,65 @@ class StableOpenAICompatibleStructuredClient:
                     and not self._uses_raw_responses_stream(gateway)
                     and self._should_fallback_responses_stream(exc)
                 ):
+                    self._responses_force_stream_gateway_indices.discard(gateway.index)
                     self._responses_non_stream_gateway_indices.add(gateway.index)
+                schema_fallback_triggered = False
+                if (
+                    active_response_format_mode == "json_schema"
+                    and not request_metrics["schema_fallback_used"]
+                    and self._should_fallback_json_schema_to_json_object(
+                        status_code=status_code,
+                        error_code=error_details["error_code"],
+                        error_text=error_details["classifier_text"],
+                    )
+                ):
+                    schema_fallback_triggered = True
+                    retryable = True
+                    active_response_format_mode = "json_object"
+                    active_output_contract_mode = "blueprint"
+                    active_system_instruction = self._compose_system_instruction(
+                        system_instruction,
+                        response_model,
+                        response_format_mode="json_object",
+                        output_contract_mode="blueprint",
+                    )
+                    active_response_format = self._build_response_format(
+                        response_model,
+                        response_format_mode="json_object",
+                    )
+                    cache_key = self._build_local_request_cache_key(
+                        model_name=model_name,
+                        response_model=response_model,
+                        response_format=active_response_format,
+                        response_format_mode=active_response_format_mode,
+                        output_contract_mode=active_output_contract_mode,
+                        system_instruction=active_system_instruction,
+                        user_content=user_content,
+                        temperature_sent=temperature_decision["temperature_sent"],
+                        temperature_omitted_reason=temperature_decision["temperature_omitted_reason"],
+                        max_output_tokens=max_output_tokens,
+                    )
+                    request_metrics["schema_fallback_used"] = True
+                    request_metrics["schema_fallback_reason"] = error_details["message"]
+                    request_metrics["response_format_mode_effective"] = active_response_format_mode
+                    request_metrics["response_format_type"] = active_response_format.get("type")
+                    request_metrics["json_schema_strict"] = False
+                    request_metrics["output_contract_mode_effective"] = active_output_contract_mode
+                    request_metrics["system_chars"] = len(active_system_instruction)
+                    request_metrics["request_chars"] = len(active_system_instruction) + len(user_content)
+                    request_metrics["cache_key"] = cache_key
                 apply_retry_bonus = retryable and self._should_apply_upstream_retry_bonus(
                     status_code=status_code,
                     error_text=error_details["classifier_text"],
                 )
                 attempt_limit = attempts if apply_retry_bonus else base_attempts
-                retry_strategy = "upstream_bonus" if apply_retry_bonus else ("standard" if retryable else "none")
+                if schema_fallback_triggered:
+                    attempt_limit = max(attempt_limit, attempted_count + 1)
+                retry_strategy = (
+                    "schema_fallback"
+                    if schema_fallback_triggered
+                    else ("upstream_bonus" if apply_retry_bonus else ("standard" if retryable else "none"))
+                )
                 self._consecutive_retryable_failures = self._consecutive_retryable_failures + 1 if retryable else 0
                 elapsed = time.perf_counter() - started
                 raw_response_path = self._persist_raw_text(
@@ -463,6 +571,8 @@ class StableOpenAICompatibleStructuredClient:
                         request_metrics=request_metrics,
                     ) from exc
 
+                if schema_fallback_triggered:
+                    continue
                 time.sleep(
                     self._compute_backoff_seconds(
                         attempt,
@@ -689,7 +799,7 @@ class StableOpenAICompatibleStructuredClient:
         raw_messages: list[dict[str, str]] | None,
         stream: bool,
     ) -> tuple[str, float | None, dict[str, Any]]:
-        request_kwargs = self._build_responses_request_kwargs(
+        request_build = self._build_responses_request_kwargs(
             model_name=model_name,
             system_instruction=system_instruction,
             user_content=user_content,
@@ -698,6 +808,7 @@ class StableOpenAICompatibleStructuredClient:
             response_format=response_format,
             raw_messages=raw_messages,
         )
+        request_kwargs = request_build.request_kwargs
         if stream:
             if gateway is None:
                 raise RuntimeError("Missing gateway metadata for streaming /responses request.")
@@ -715,7 +826,7 @@ class StableOpenAICompatibleStructuredClient:
         max_output_tokens: int,
         response_format: dict[str, Any] | None,
         raw_messages: list[dict[str, str]] | None,
-    ) -> dict[str, Any]:
+    ) -> ResponsesRequestBuild:
         text_config = self._build_responses_text_config(response_format)
         instructions, input_messages = self._build_responses_messages(
             system_instruction=system_instruction,
@@ -735,9 +846,15 @@ class StableOpenAICompatibleStructuredClient:
         reasoning = self._build_reasoning_config()
         if reasoning is not None:
             request_kwargs["reasoning"] = reasoning
-        # Some OpenAI-compatible gateways reject temperature on /responses,
-        # so the parameter is omitted for compatibility.
-        return request_kwargs
+        temperature_decision = self._temperature_request_decision(temperature)
+        if temperature_decision["temperature_sent"] is not None:
+            request_kwargs["temperature"] = temperature_decision["temperature_sent"]
+        return ResponsesRequestBuild(
+            request_kwargs=request_kwargs,
+            temperature_requested=float(temperature),
+            temperature_sent=temperature_decision["temperature_sent"],
+            temperature_omitted_reason=temperature_decision["temperature_omitted_reason"],
+        )
 
     def _build_responses_messages(
         self,
@@ -869,6 +986,7 @@ class StableOpenAICompatibleStructuredClient:
             "Accept": "text/event-stream",
         }
         response_url = f"{gateway.base_url.rstrip('/')}/responses"
+        stream_timeout_seconds = max(float(self.project_config.model.timeout_seconds or 0), 1.0)
         with gateway.http_client.stream("POST", response_url, headers=headers, json=payload) as response:
             if response.is_error:
                 response.read()
@@ -876,6 +994,10 @@ class StableOpenAICompatibleStructuredClient:
             event_name = ""
             data_lines: list[str] = []
             for raw_line in response.iter_lines():
+                if time.perf_counter() - started > stream_timeout_seconds:
+                    raise httpx.ReadTimeout(
+                        f"Responses stream exceeded {stream_timeout_seconds:g}s without completing."
+                    )
                 line = raw_line if isinstance(raw_line, str) else str(raw_line or "")
                 if not line:
                     event_type, payload_obj = self._finalize_sse_event(event_name, data_lines)
@@ -897,6 +1019,15 @@ class StableOpenAICompatibleStructuredClient:
                             first_chunk_seconds = now - started
                         if text_value:
                             final_text = str(text_value)
+                        continue
+                    if event_type == "response.output_item.done":
+                        item_payload = payload_obj.get("item")
+                        if isinstance(item_payload, dict) and item_payload.get("type") == "message":
+                            text_value = self._extract_response_text({"output": [item_payload]})
+                            if first_chunk_seconds is None and text_value:
+                                first_chunk_seconds = now - started
+                            if text_value:
+                                return text_value, first_chunk_seconds, usage
                         continue
                     if event_type == "response.completed":
                         response_payload = payload_obj.get("response")
@@ -997,33 +1128,62 @@ class StableOpenAICompatibleStructuredClient:
         )
         return raw_text, usage
 
+    def _temperature_request_decision(self, temperature: float) -> dict[str, Any]:
+        requested = float(temperature)
+        if self._use_responses_api():
+            return {
+                "temperature_requested": requested,
+                "temperature_sent": None,
+                "temperature_omitted_reason": "omitted_for_responses_compatibility",
+            }
+        return {
+            "temperature_requested": requested,
+            "temperature_sent": requested,
+            "temperature_omitted_reason": "",
+        }
+
     def _build_local_request_cache_key(
         self,
         *,
         model_name: str,
         response_model: type[T],
         response_format: dict[str, Any],
+        response_format_mode: str | None = None,
+        output_contract_mode: str | None = None,
         system_instruction: str,
         user_content: str,
-        temperature: float,
+        temperature_sent: float | None,
+        temperature_omitted_reason: str,
         max_output_tokens: int,
     ) -> str:
         signature = {
             "cache_version": self.project_config.stability.local_request_cache_version,
             "api_route": self.project_config.model.api_route,
-            "response_format_mode": self.project_config.model.response_format,
+            "response_format_mode": response_format_mode or self.project_config.model.response_format,
+            "output_contract_mode": output_contract_mode or "",
             "reasoning_effort": self.project_config.model.reasoning_effort,
             "model_name": model_name,
             "response_model_name": response_model.__name__,
-            "response_schema": response_model.model_json_schema(by_alias=True),
+            "response_schema": self._schema_from_response_format(response_format),
             "response_format": response_format,
             "system_instruction": system_instruction,
             "user_content": user_content,
-            "temperature": temperature,
+            "temperature_sent": temperature_sent,
+            "temperature_omitted_reason": temperature_omitted_reason,
             "max_output_tokens": max_output_tokens,
         }
         canonical = self._canonical_json(signature)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _schema_from_response_format(response_format: dict[str, Any]) -> dict[str, Any]:
+        if response_format.get("type") != "json_schema":
+            return {}
+        json_schema = response_format.get("json_schema")
+        if not isinstance(json_schema, dict):
+            return {}
+        schema = json_schema.get("schema")
+        return schema if isinstance(schema, dict) else {}
 
     def _load_cached_structured_response(
         self,
@@ -1491,6 +1651,11 @@ class StableOpenAICompatibleStructuredClient:
         if force_stream is not None:
             return force_stream
         if self._use_responses_api():
+            target_gateway = gateway or self._gateways[self._preferred_gateway_index]
+            if target_gateway.index in self._responses_force_stream_gateway_indices:
+                return True
+            if not self.project_config.stability.stream:
+                return False
             return self._should_stream_responses_for_gateway(gateway)
         return self.project_config.stability.stream
 
@@ -1575,7 +1740,7 @@ class StableOpenAICompatibleStructuredClient:
             )
         ):
             return True, status_code
-        if status_code in {408, 409, 429, 500, 502, 503, 504}:
+        if status_code in RETRYABLE_HTTP_STATUSES:
             return True, status_code
         return False, status_code
 
@@ -1583,10 +1748,48 @@ class StableOpenAICompatibleStructuredClient:
     def _should_apply_upstream_retry_bonus(*, status_code: int | None, error_text: str) -> bool:
         if status_code in UPSTREAM_RETRY_BONUS_STATUSES:
             return True
+        normalized = error_text.casefold()
+        if status_code is None:
+            return any(
+                marker in normalized
+                for marker in (
+                    "readtimeout",
+                    "connecttimeout",
+                    "writetimeout",
+                    "remoteprotocolerror",
+                    "stream exceeded",
+                    "without completing",
+                    "timed out",
+                    "timeout",
+                    "connection reset",
+                    "response ended prematurely",
+                )
+            )
         if status_code == 400:
-            normalized = error_text.casefold()
             return any(marker in normalized for marker in TRANSIENT_400_MARKERS)
         return False
+
+    @staticmethod
+    def _should_fallback_json_schema_to_json_object(
+        *,
+        status_code: int | None,
+        error_code: str,
+        error_text: str,
+    ) -> bool:
+        if status_code != 400:
+            return False
+        normalized_code = (error_code or "").casefold()
+        normalized_text = (error_text or "").casefold()
+        if normalized_code == "invalid_json_schema":
+            return True
+        return any(
+            marker in normalized_text
+            for marker in (
+                "invalid_json_schema",
+                "invalid schema for response_format",
+                "text.format.schema",
+            )
+        )
 
     @staticmethod
     def _should_fallback_responses_stream(exc: Exception) -> bool:
@@ -1619,10 +1822,17 @@ class StableOpenAICompatibleStructuredClient:
             )
         )
 
-    @staticmethod
-    def _should_restore_responses_stream(exc: Exception) -> bool:
-        status_code = getattr(exc, "status_code", None)
-        message = str(exc).casefold()
+    @classmethod
+    def _should_restore_responses_stream(cls, exc: Exception) -> bool:
+        status_code = cls._status_code_from_exception(exc)
+        response = getattr(exc, "response", None)
+        body_payload = getattr(exc, "body", None)
+        message_parts = [str(exc)]
+        if body_payload not in (None, ""):
+            message_parts.append(cls._stringify_error_payload(body_payload))
+        if response is not None:
+            message_parts.append(cls._extract_response_body_text(response))
+        message = "\n".join(part for part in message_parts if part).casefold()
         return status_code == 400 and "stream must be set to true" in message
 
     def _build_gateway_handles(
@@ -1766,9 +1976,54 @@ class StableOpenAICompatibleStructuredClient:
             "json_schema": {
                 "name": response_model.__name__,
                 "strict": True,
-                "schema": response_model.model_json_schema(by_alias=True),
+                "schema": self._build_openai_strict_json_schema(response_model),
             },
         }
+
+    @classmethod
+    def _build_openai_strict_json_schema(cls, response_model: type[T]) -> dict[str, Any]:
+        if _openai_to_strict_json_schema is not None:
+            try:
+                schema = _openai_to_strict_json_schema(response_model)
+            except Exception:  # noqa: BLE001
+                schema = response_model.model_json_schema(by_alias=True)
+        else:
+            schema = response_model.model_json_schema(by_alias=True)
+        return cls._sanitize_openai_strict_json_schema(schema)
+
+    @classmethod
+    def _sanitize_openai_strict_json_schema(cls, schema: dict[str, Any]) -> dict[str, Any]:
+        sanitized = copy.deepcopy(schema)
+        cls._sanitize_openai_strict_schema_node(sanitized)
+        return sanitized
+
+    @classmethod
+    def _sanitize_openai_strict_schema_node(cls, node: Any) -> None:
+        if isinstance(node, list):
+            for item in node:
+                cls._sanitize_openai_strict_schema_node(item)
+            return
+        if not isinstance(node, dict):
+            return
+
+        for key, value in list(node.items()):
+            if key == "additionalProperties":
+                continue
+            cls._sanitize_openai_strict_schema_node(value)
+
+        if not cls._schema_node_allows_object(node):
+            return
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            node["required"] = list(properties.keys())
+        node["additionalProperties"] = False
+
+    @staticmethod
+    def _schema_node_allows_object(node: dict[str, Any]) -> bool:
+        schema_type = node.get("type")
+        if schema_type == "object":
+            return True
+        return isinstance(schema_type, list) and "object" in schema_type
 
     @classmethod
     def _field_external_name(cls, field_name: str, field_info: Any) -> str:
@@ -1948,10 +2203,10 @@ class StableOpenAICompatibleStructuredClient:
     def _extract_response_text(response: Any) -> str:
         if isinstance(response, str):
             return response.strip()
-        output_text = getattr(response, "output_text", None)
+        output_text = response.get("output_text") if isinstance(response, dict) else getattr(response, "output_text", None)
         if isinstance(output_text, str) and output_text.strip():
             return output_text.strip()
-        output = getattr(response, "output", None)
+        output = response.get("output") if isinstance(response, dict) else getattr(response, "output", None)
         if isinstance(output, list):
             parts: list[str] = []
             for item in output:
@@ -1970,6 +2225,10 @@ class StableOpenAICompatibleStructuredClient:
                         parts.append(str(text_value))
             if parts:
                 return "".join(parts).strip()
+            if isinstance(response, dict):
+                return ""
+        if isinstance(response, dict):
+            return ""
         try:
             message = response.choices[0].message
         except Exception as exc:  # noqa: BLE001
@@ -2028,4 +2287,3 @@ class StableOpenAICompatibleStructuredClient:
     @staticmethod
     def _loads_json(raw_text: str) -> Any:
         return loads_json_fragment(raw_text)
-

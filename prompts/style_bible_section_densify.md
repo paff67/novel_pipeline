@@ -10,6 +10,7 @@
 ## 核心原则
 - 一次只处理当前目标路径，不要输出其他 path，不要补整份终态蓝图。
 - 一条新 row 只核销一个 slot；不要把多个 slot 压成一条“大而全”的规则。
+- 如果 `target_gap.deficit > 0` 但 `missing_slots` 已被现有 rows 覆盖，本轮仍要补“同 slot 下的不同触发器 / 机制 / 应用场景”，直到 `target_count` 有机会达标；不要因为 slot 名义覆盖就返回空结果。
 - 只有当本次检索到的 reasoning 与 evidence 直接支撑某个 slot 时，才允许新增规则。
 - 如果 slot 要求 fresh evidence，本轮 evidence 必须来自命中该 slot 的 reasoning，而不是复写 burned 证据。
 - runtime schema 已经给出字段合同；你只需要保证语义正确、grounding 真实、增量明确。

@@ -106,8 +106,9 @@ class StyleBibleSemanticEvalTest(unittest.TestCase):
 
             self.assertEqual(len(rows), 3)
             self.assertEqual(report["summary"]["total_rules"], 3)
-            self.assertEqual(report["decision_source"], "semantic_rule_engine")
-            self.assertEqual(report["judge_model_name"], "qwen-semantic-judge")
+            self.assertEqual(report["decision_source"], "offline_semantic_rule_engine")
+            self.assertEqual(report["judge_model_name"], "offline_semantic_rule_engine")
+            self.assertEqual(report["requested_semantic_judge_model"], "qwen-semantic-judge")
             self.assertEqual(len(dataset["rows"]), 3)
             self.assertTrue(all("specificity" in row for row in rows))
             self.assertTrue(all("actionability" in row for row in rows))

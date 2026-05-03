@@ -6,8 +6,8 @@ max_paths_per_bucket = 4
 
 [densify]
 enabled = true
-max_rounds = 2
-max_paths_per_round = 6
+max_rounds = 3
+max_paths_per_round = 8
 retrieval_top_k = 12
 dedupe_threshold = 0.94
 slot_match_threshold = 0.72

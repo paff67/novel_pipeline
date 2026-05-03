@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,7 @@ from novel_pipeline_stable.text_normalization import normalize_for_extraction
 
 
 METADATA_JSON_NAMES = {"manifest.json", "failures.json", "run_status.json"}
+ARTIFACT_FINGERPRINT_VERSION = "artifact-fingerprint-v1"
 
 
 def _style_anchor(text: Any, *, limit: int, tail: bool = False) -> str:
@@ -111,6 +113,176 @@ def _write_tracking_files(
     failure_rows = sorted(failures_by_key.values(), key=lambda row: row.get(failure_sort_key, ""))
     write_json(manifest_path, manifest_rows)
     write_json(failures_path, failure_rows)
+
+
+def _canonical_json(payload: Any) -> str:
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _sha256_payload(payload: Any) -> str:
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _artifact_fingerprint(*, kind: str, input_payload: Any, prompt_text: str, config_payload: dict[str, Any]) -> dict[str, Any]:
+    payload = {
+        "version": ARTIFACT_FINGERPRINT_VERSION,
+        "kind": kind,
+        "input_sha256": _sha256_payload(input_payload),
+        "prompt_sha256": _sha256_text(prompt_text),
+        "config_sha256": _sha256_payload(config_payload),
+    }
+    payload["sha256"] = _sha256_payload(payload)
+    return payload
+
+
+def _fact_config_fingerprint_payload(config: StableProjectConfig) -> dict[str, Any]:
+    return {
+        "api_route": config.model.api_route,
+        "model": config.model.fact_model,
+        "temperature": config.model.fact_temperature,
+        "max_output_tokens": config.model.fact_max_output_tokens,
+        "response_format": config.model.response_format,
+        "facts_two_pass_enabled": config.stability.facts_two_pass_enabled,
+        "facts_two_pass_scene_char_threshold": config.stability.facts_two_pass_scene_char_threshold,
+        "facts_two_pass_request_char_threshold": config.stability.facts_two_pass_request_char_threshold,
+        "facts_two_pass_on_failure": config.stability.facts_two_pass_on_failure,
+        "facts_two_pass_include_primary_context": config.stability.facts_two_pass_include_primary_context,
+    }
+
+
+def _style_config_fingerprint_payload(config: StableProjectConfig) -> dict[str, Any]:
+    return {
+        "api_route": config.model.api_route,
+        "model": config.model.style_model,
+        "temperature": config.model.style_temperature,
+        "max_output_tokens": config.model.style_max_output_tokens,
+        "response_format": config.model.response_format,
+        "style_window_size": config.style_windows.window_size,
+        "style_window_stride": config.style_windows.stride,
+    }
+
+
+@dataclass(slots=True)
+class ResumeValidation:
+    valid: bool
+    reason: str = ""
+    legacy_without_fingerprint: bool = False
+
+
+def _scene_output_file_from_manifest_row(row: dict[str, Any]) -> str:
+    output_file = str(row.get("output_file") or "").strip()
+    if output_file:
+        return output_file
+    chapter_id = str(row.get("chapter_id") or "").strip()
+    scene_index = row.get("scene_index")
+    try:
+        scene_index_int = int(scene_index)
+    except (TypeError, ValueError):
+        scene_index_int = 0
+    if chapter_id and scene_index_int > 0:
+        return f"scene_{chapter_id}_{scene_index_int:03d}.json"
+    scene_id = str(row.get("scene_id") or "").strip()
+    return f"scene_{scene_id}.json" if scene_id else ""
+
+
+def _scene_input_files(input_dir: str | Path) -> list[Path]:
+    input_path = Path(input_dir)
+    manifest_path = input_path / "manifest.json"
+    if manifest_path.exists():
+        payload = read_json(manifest_path)
+        if isinstance(payload, list):
+            files: list[Path] = []
+            for row in payload:
+                if not isinstance(row, dict):
+                    continue
+                output_file = _scene_output_file_from_manifest_row(row)
+                if not output_file:
+                    continue
+                scene_path = input_path / output_file
+                if not scene_path.exists():
+                    raise FileNotFoundError(f"Scene manifest references missing output file: {scene_path}")
+                files.append(scene_path)
+            if files:
+                return files
+    return [path for path in iter_json_files(input_path) if path.name not in METADATA_JSON_NAMES]
+
+
+def _validate_fact_resume_artifact(
+    *,
+    output_file: Path,
+    scene_file: Path,
+    scene: dict[str, Any],
+    manifest_row: dict[str, Any] | None,
+    expected_fingerprint: dict[str, Any],
+) -> ResumeValidation:
+    try:
+        payload = read_json(output_file)
+    except Exception as exc:  # noqa: BLE001
+        return ResumeValidation(False, f"invalid_json:{type(exc).__name__}")
+    if not isinstance(payload, dict):
+        return ResumeValidation(False, "payload_not_object")
+    try:
+        FactExtractionResult.model_validate(dict(payload))
+    except Exception as exc:  # noqa: BLE001
+        return ResumeValidation(False, f"schema_invalid:{type(exc).__name__}")
+    if str(payload.get("source_file") or "") != scene_file.name:
+        return ResumeValidation(False, "source_file_mismatch")
+    if str(payload.get("scene_id") or "") != str(scene.get("scene_id", scene_file.stem)):
+        return ResumeValidation(False, "scene_id_mismatch")
+    if str(payload.get("chapter_id") or "") != str(scene.get("chapter_id", "")):
+        return ResumeValidation(False, "chapter_id_mismatch")
+    if manifest_row:
+        if str(manifest_row.get("source_file") or "") != scene_file.name:
+            return ResumeValidation(False, "manifest_source_file_mismatch")
+        if str(manifest_row.get("output_file") or "") and str(manifest_row.get("output_file") or "") != output_file.name:
+            return ResumeValidation(False, "manifest_output_file_mismatch")
+    artifact_fingerprint = payload.get("artifact_fingerprint")
+    if not artifact_fingerprint:
+        return ResumeValidation(True, "legacy_without_fingerprint", legacy_without_fingerprint=True)
+    if artifact_fingerprint != expected_fingerprint:
+        return ResumeValidation(False, "artifact_fingerprint_mismatch")
+    return ResumeValidation(True)
+
+
+def _validate_style_resume_artifact(
+    *,
+    output_file: Path,
+    window_id: str,
+    chapter_ids: list[str],
+    manifest_row: dict[str, Any] | None,
+    expected_fingerprint: dict[str, Any],
+) -> ResumeValidation:
+    try:
+        payload = read_json(output_file)
+    except Exception as exc:  # noqa: BLE001
+        return ResumeValidation(False, f"invalid_json:{type(exc).__name__}")
+    if not isinstance(payload, dict):
+        return ResumeValidation(False, "payload_not_object")
+    validation_payload = dict(payload)
+    validation_payload.pop("artifact_fingerprint", None)
+    try:
+        StyleWindowSignalResult.model_validate(validation_payload)
+    except Exception as exc:  # noqa: BLE001
+        return ResumeValidation(False, f"schema_invalid:{type(exc).__name__}")
+    if str(payload.get("window_id") or "") != window_id:
+        return ResumeValidation(False, "window_id_mismatch")
+    if list(payload.get("chapter_ids", []) or []) != chapter_ids:
+        return ResumeValidation(False, "chapter_ids_mismatch")
+    if manifest_row:
+        if str(manifest_row.get("output_file") or "") and str(manifest_row.get("output_file") or "") != output_file.name:
+            return ResumeValidation(False, "manifest_output_file_mismatch")
+        if list(manifest_row.get("chapter_ids", []) or []) != chapter_ids:
+            return ResumeValidation(False, "manifest_chapter_ids_mismatch")
+    artifact_fingerprint = payload.get("artifact_fingerprint")
+    if not artifact_fingerprint:
+        return ResumeValidation(True, "legacy_without_fingerprint", legacy_without_fingerprint=True)
+    if artifact_fingerprint != expected_fingerprint:
+        return ResumeValidation(False, "artifact_fingerprint_mismatch")
+    return ResumeValidation(True)
 
 
 def _serialize_payload(config: StableProjectConfig, payload: dict[str, Any]) -> str:
@@ -739,7 +911,7 @@ def extract_facts(
     manifest_path = output_path / "manifest.json"
     failures_path = output_path / "failures.json"
 
-    files = [path for path in iter_json_files(input_dir) if path.name not in METADATA_JSON_NAMES]
+    files = _scene_input_files(input_dir)
     if start_at:
         files = files[start_at:]
     if limit is not None:
@@ -781,25 +953,54 @@ def extract_facts(
             scene = read_json(scene_file)
             scene_id = scene.get("scene_id", scene_file.stem)
             chapter_id = scene.get("chapter_id", "")
-            if resume and output_file.exists():
-                failures_by_key.pop(scene_file.name, None)
-                _write_tracking_files(
-                    manifest_path,
-                    manifest_by_key,
-                    failures_path,
-                    failures_by_key,
-                    manifest_sort_key="source_file",
-                    failure_sort_key="source_file",
-                )
-                tracker.record_skip(
-                    scene_file.name,
-                    f"Skipped existing output for {scene_file.name}.",
-                    scene_id=scene_id,
-                    chapter_id=chapter_id,
-                )
-                continue
-
             payload = _build_fact_payload(config, scene)
+            artifact_fingerprint = _artifact_fingerprint(
+                kind="fact_extraction",
+                input_payload=scene,
+                prompt_text=system_prompt,
+                config_payload=_fact_config_fingerprint_payload(config),
+            )
+            if resume and output_file.exists():
+                resume_validation = _validate_fact_resume_artifact(
+                    output_file=output_file,
+                    scene_file=scene_file,
+                    scene=scene,
+                    manifest_row=manifest_by_key.get(scene_file.name),
+                    expected_fingerprint=artifact_fingerprint,
+                )
+                if not resume_validation.valid:
+                    tracker.log(
+                        f"Existing fact output will be regenerated for {scene_file.name}: {resume_validation.reason}",
+                        level="warning",
+                        event="resume_invalid",
+                        item=scene_file.name,
+                        reason=resume_validation.reason,
+                    )
+                else:
+                    if resume_validation.legacy_without_fingerprint:
+                        tracker.log(
+                            f"Skipped legacy fact output without fingerprint for {scene_file.name}.",
+                            level="warning",
+                            event="resume_legacy_without_fingerprint",
+                            item=scene_file.name,
+                        )
+                    failures_by_key.pop(scene_file.name, None)
+                    _write_tracking_files(
+                        manifest_path,
+                        manifest_by_key,
+                        failures_path,
+                        failures_by_key,
+                        manifest_sort_key="source_file",
+                        failure_sort_key="source_file",
+                    )
+                    tracker.record_skip(
+                        scene_file.name,
+                        f"Skipped existing output for {scene_file.name}.",
+                        scene_id=scene_id,
+                        chapter_id=chapter_id,
+                    )
+                    continue
+
             try:
                 result = _run_fact_extraction(
                     client,
@@ -813,6 +1014,7 @@ def extract_facts(
                 record["chapter_title"] = payload["chapter_title"]
                 record["scene_index"] = payload["scene_index"]
                 record["source_file"] = scene_file.name
+                record["artifact_fingerprint"] = artifact_fingerprint
                 write_json(output_file, record)
                 manifest_by_key[scene_file.name] = {
                     "source_file": scene_file.name,
@@ -826,6 +1028,7 @@ def extract_facts(
                     "extraction_strategy": result.extraction_strategy,
                     "trigger_reasons": result.request_metrics.get("trigger_reasons", []),
                     "normalization_applied": payload.get("normalization_applied", []),
+                    "artifact_fingerprint": artifact_fingerprint,
                 }
                 failures_by_key.pop(scene_file.name, None)
                 success_count += 1
@@ -888,10 +1091,12 @@ def extract_facts(
             manifest_sort_key="source_file",
             failure_sort_key="source_file",
         )
+        outstanding_failures = len(failures_by_key)
         tracker.finish(
             "Stable fact extraction completed.",
+            status="completed" if outstanding_failures == 0 else "completed_with_failures",
             manifest_count=len(manifest_by_key),
-            outstanding_failures=len(failures_by_key),
+            outstanding_failures=outstanding_failures,
             success_count=success_count,
             failure_count=failure_count,
         )
@@ -969,20 +1174,49 @@ def extract_style(
             file_name = f"style_window_{start_id}_{end_id}.json"
             output_file = output_path / file_name
             window_id = f"{start_id}_{end_id}"
-            if resume and output_file.exists():
-                failures_by_key.pop(window_id, None)
-                _write_tracking_files(
-                    manifest_path,
-                    manifest_by_key,
-                    failures_path,
-                    failures_by_key,
-                    manifest_sort_key="window_id",
-                    failure_sort_key="window_id",
-                )
-                tracker.record_skip(window_id, f"Skipped existing output for {file_name}.", file_name=file_name)
-                continue
-
             payload, applied_rules = _build_style_payload(config, window)
+            artifact_fingerprint = _artifact_fingerprint(
+                kind="style_extraction",
+                input_payload=payload,
+                prompt_text=system_prompt,
+                config_payload=_style_config_fingerprint_payload(config),
+            )
+            if resume and output_file.exists():
+                resume_validation = _validate_style_resume_artifact(
+                    output_file=output_file,
+                    window_id=window_id,
+                    chapter_ids=list(payload["chapter_ids"]),
+                    manifest_row=manifest_by_key.get(window_id),
+                    expected_fingerprint=artifact_fingerprint,
+                )
+                if not resume_validation.valid:
+                    tracker.log(
+                        f"Existing style output will be regenerated for {file_name}: {resume_validation.reason}",
+                        level="warning",
+                        event="resume_invalid",
+                        item=window_id,
+                        reason=resume_validation.reason,
+                    )
+                else:
+                    if resume_validation.legacy_without_fingerprint:
+                        tracker.log(
+                            f"Skipped legacy style output without fingerprint for {file_name}.",
+                            level="warning",
+                            event="resume_legacy_without_fingerprint",
+                            item=window_id,
+                        )
+                    failures_by_key.pop(window_id, None)
+                    _write_tracking_files(
+                        manifest_path,
+                        manifest_by_key,
+                        failures_path,
+                        failures_by_key,
+                        manifest_sort_key="window_id",
+                        failure_sort_key="window_id",
+                    )
+                    tracker.record_skip(window_id, f"Skipped existing output for {file_name}.", file_name=file_name)
+                    continue
+
             try:
                 response = client.generate_structured(
                     request_key=f"style_{window_id}",
@@ -993,6 +1227,7 @@ def extract_style(
                     temperature=config.model.style_temperature,
                     max_output_tokens=config.model.style_max_output_tokens,
                     response_format_mode="json_schema",
+                    output_contract_mode="blueprint",
                 )
                 record = _hydrate_style_record(response.parsed.model_dump(mode="json"), payload=payload)
                 _ensure_style_record_has_content(
@@ -1001,6 +1236,7 @@ def extract_style(
                     record=record,
                 )
                 record["source_chapter_titles"] = [chapter.title for chapter in window]
+                record["artifact_fingerprint"] = artifact_fingerprint
                 write_json(output_file, record)
                 manifest_by_key[window_id] = {
                     "window_id": window_id,
@@ -1011,6 +1247,7 @@ def extract_style(
                     "usage_metadata": response.usage_metadata,
                     "request_metrics": response.request_metrics,
                     "normalization_applied": applied_rules,
+                    "artifact_fingerprint": artifact_fingerprint,
                 }
                 failures_by_key.pop(window_id, None)
                 success_count += 1
@@ -1065,14 +1302,15 @@ def extract_style(
             manifest_sort_key="window_id",
             failure_sort_key="window_id",
         )
+        outstanding_failures = len(failures_by_key)
         tracker.finish(
             "Stable style extraction completed.",
+            status="completed" if outstanding_failures == 0 else "completed_with_failures",
             manifest_count=len(manifest_by_key),
-            outstanding_failures=len(failures_by_key),
+            outstanding_failures=outstanding_failures,
             success_count=success_count,
             failure_count=failure_count,
         )
     except Exception as exc:  # noqa: BLE001
         tracker.fail_run(f"Stable style extraction aborted: {exc}", error_type=type(exc).__name__)
         raise
-

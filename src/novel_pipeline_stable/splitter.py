@@ -5,7 +5,7 @@ from pathlib import Path
 
 from novel_pipeline_stable.chapter_cleanup import sanitize_chapter_content, should_skip_meta_chapter
 from novel_pipeline_stable.config import ProjectConfig
-from novel_pipeline_stable.io_utils import ensure_dir, iter_text_files, write_json, write_model
+from novel_pipeline_stable.io_utils import clear_matching, ensure_dir, iter_text_files, write_json, write_model
 from novel_pipeline_stable.models import ChapterDocument, SceneDocument
 from novel_pipeline_stable.monitoring import RunTracker
 
@@ -142,9 +142,15 @@ def _hard_split_text(text: str, max_chars: int) -> list[str]:
 
 
 
-def run_scene_split(config: ProjectConfig, input_dir: str | Path, output_dir: str | Path) -> None:
+def run_scene_split(config: ProjectConfig, input_dir: str | Path, output_dir: str | Path, *, clear: bool = False) -> None:
     input_path = Path(input_dir)
     output_path = ensure_dir(output_dir)
+    if clear:
+        clear_matching(output_path, "scene_*.json")
+        for file_name in ("manifest.json", "run_status.json", "run_log.jsonl", "failures.json"):
+            target = output_path / file_name
+            if target.exists() and target.is_file():
+                target.unlink()
     chapter_files = list(iter_text_files(input_path))
     tracker = RunTracker(
         stage="split-scenes",
@@ -187,6 +193,7 @@ def run_scene_split(config: ProjectConfig, input_dir: str | Path, output_dir: st
                         "scene_index": scene.scene_index,
                         "char_count": scene.char_count,
                         "source_file": scene.source_file,
+                        "output_file": scene_path.name,
                     }
                 )
             generated_scene_count += len(scenes)
@@ -206,4 +213,3 @@ def run_scene_split(config: ProjectConfig, input_dir: str | Path, output_dir: st
     except Exception as exc:  # noqa: BLE001
         tracker.fail_run(f"Scene split aborted: {exc}", error_type=type(exc).__name__)
         raise
-

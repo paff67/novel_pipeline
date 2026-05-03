@@ -559,43 +559,48 @@ def _load_resumable_local_reduce_artifacts(
             failed_bucket_ids.append(bucket_id)
             continue
 
-        artifact = _load_local_reduce_artifact_from_dir(
-            bucket_memo=bucket_memo,
-            output_dir=bucket_output_dir,
-            source_bundle=source_bundle,
-        )
-        repair_history_present = bool(artifact.repair_passes)
-        repair_root = bucket_output_dir / "_repair_passes"
-        if repair_root.exists() and not repair_history_present:
-            for repair_dir in sorted(path for path in repair_root.glob("pass_*") if path.is_dir()):
-                repair_final_path = repair_dir / "local_final.json"
-                repair_reasoning_path = repair_dir / "local_reasoning.json"
-                if not repair_final_path.exists() or not repair_reasoning_path.exists():
-                    continue
-                repair_artifact = _load_local_reduce_artifact_from_dir(
-                    bucket_memo=bucket_memo,
-                    output_dir=repair_dir,
-                    source_bundle=source_bundle,
-                )
-                repair_summary_path = repair_dir / "local_reduce_summary.json"
-                repair_summary = read_json(repair_summary_path) if repair_summary_path.exists() else {}
-                if not isinstance(repair_summary, dict):
-                    repair_summary = {}
-                repair_request = {}
-                summary_request_metrics = repair_summary.get("request_metrics", {})
-                if isinstance(summary_request_metrics, dict):
-                    repair_request = dict(summary_request_metrics.get("repair_request", {}) or {})
-                if not repair_request:
-                    repair_request = _synthesize_repair_request(
-                        base_artifact=artifact,
-                        repair_artifact=repair_artifact,
-                        section_targets=section_targets,
+        try:
+            artifact = _load_local_reduce_artifact_from_dir(
+                bucket_memo=bucket_memo,
+                output_dir=bucket_output_dir,
+                source_bundle=source_bundle,
+            )
+            repair_history_present = bool(artifact.repair_passes)
+            repair_root = bucket_output_dir / "_repair_passes"
+            if repair_root.exists() and not repair_history_present:
+                for repair_dir in sorted(path for path in repair_root.glob("pass_*") if path.is_dir()):
+                    repair_final_path = repair_dir / "local_final.json"
+                    repair_reasoning_path = repair_dir / "local_reasoning.json"
+                    if not repair_final_path.exists() or not repair_reasoning_path.exists():
+                        continue
+                    repair_artifact = _load_local_reduce_artifact_from_dir(
+                        bucket_memo=bucket_memo,
+                        output_dir=repair_dir,
+                        source_bundle=source_bundle,
                     )
-                artifact = _merge_local_artifact_with_repair(
-                    artifact,
-                    repair_artifact,
-                    repair_request=repair_request,
-                )
+                    repair_summary_path = repair_dir / "local_reduce_summary.json"
+                    repair_summary = read_json(repair_summary_path) if repair_summary_path.exists() else {}
+                    if not isinstance(repair_summary, dict):
+                        repair_summary = {}
+                    repair_request = {}
+                    summary_request_metrics = repair_summary.get("request_metrics", {})
+                    if isinstance(summary_request_metrics, dict):
+                        repair_request = dict(summary_request_metrics.get("repair_request", {}) or {})
+                    if not repair_request:
+                        repair_request = _synthesize_repair_request(
+                            base_artifact=artifact,
+                            repair_artifact=repair_artifact,
+                            section_targets=section_targets,
+                        )
+                    artifact = _merge_local_artifact_with_repair(
+                        artifact,
+                        repair_artifact,
+                        repair_request=repair_request,
+                    )
+        except Exception as exc:  # noqa: BLE001
+            _write_failed_local_reduce_summary(bucket_output_dir, bucket_id=bucket_id, exc=exc)
+            failed_bucket_ids.append(bucket_id)
+            continue
         observed_local_artifacts.append(artifact)
         if artifact.sparse:
             skipped_sparse_bucket_ids.append(bucket_id)
@@ -2189,17 +2194,28 @@ def _sanitize_rule_rows_for_path(
     return sanitized_rows
 
 
-def _rule_merge_keys(rule: StyleBibleRuleBase) -> list[str]:
-    keys = [
-        _normalize_text_key(rule.text),
-        _normalize_text_key(f"{_rule_field_text(rule, 'trigger')}|{_rule_field_text(rule, 'constraint')}"),
-        _normalize_text_key(
-            f"{_rule_field_text(rule, 'query_feature_matcher')}|{_rule_field_text(rule, 'route_target_action')}"
-        ),
-        _normalize_text_key(f"{clean_text(rule.reasoning_ref)}|{'|'.join(sorted(_unique_strings(rule.evidence_refs)))}"),
-    ]
-    filtered = [key for key in keys if key]
-    return filtered or [f"rule_id::{clean_text(rule.rule_id)}"]
+def _rule_merge_keys(rule: StyleBibleRuleBase, *, path: str) -> list[str]:
+    spec = _surface_path_spec(path)
+    keys: list[str] = []
+    text_key = _normalize_text_key(rule.text)
+    if text_key:
+        keys.append(f"text:{text_key}")
+    if spec.rule_family in {"constraint", "scalar"}:
+        trigger_key = _normalize_text_key(_rule_field_text(rule, "trigger"))
+        constraint_key = _normalize_text_key(_rule_field_text(rule, "constraint"))
+        if trigger_key and constraint_key:
+            keys.append(f"{spec.rule_family}:{trigger_key}|{constraint_key}")
+    if spec.rule_family == "routing_hint":
+        matcher_key = _normalize_text_key(_rule_field_text(rule, "query_feature_matcher"))
+        action_key = _normalize_text_key(_rule_field_text(rule, "route_target_action"))
+        if matcher_key and action_key:
+            keys.append(f"routing:{matcher_key}|{action_key}")
+    if spec.rule_family == "negative":
+        forbidden_key = _normalize_text_key(_rule_field_text(rule, "forbidden_action"))
+        correction_key = _normalize_text_key(_rule_field_text(rule, "correction_guideline"))
+        if forbidden_key and correction_key:
+            keys.append(f"negative:{forbidden_key}|{correction_key}")
+    return keys or [f"rule_id:{clean_text(rule.rule_id) or id(rule)}"]
 
 
 def _rule_candidate_priority(
@@ -2275,13 +2291,13 @@ def _path_merge_keys(rule: StyleBibleRuleBase, *, path: str) -> list[str]:
     spec = _surface_path_spec(path)
     if spec.merge_strategy == "rule_dedupe_aggressive":
         keys = [
-            _normalize_text_key(getattr(rule, field_name, ""))
+            f"{field_name}:{_normalize_text_key(getattr(rule, field_name, ''))}"
             for field_name in spec.aggressive_group_fields
             if _normalize_text_key(getattr(rule, field_name, ""))
         ]
         if keys:
             return keys
-    return _rule_merge_keys(rule)
+    return _rule_merge_keys(rule, path=path)
 
 
 def _group_rule_candidates(
@@ -2430,6 +2446,7 @@ def _assemble_path_value_from_candidates(
     candidates: list[tuple[StyleBibleRuleBase, str]],
     critical_buckets: set[str],
     bucket_order: dict[str, int],
+    minimum_items: int = 0,
     conflict_records: list[StyleBibleAssemblerConflict] | None = None,
     rule_lineage_records: list[StyleBibleRuleLineageEntry] | None = None,
     merge_events: list[StyleBibleMergeEvent] | None = None,
@@ -2581,6 +2598,55 @@ def _assemble_path_value_from_candidates(
     merged_rows.sort(key=lambda item: item["priority"])
     selected_rows = merged_rows[: spec.max_items]
     dropped_rows = merged_rows[spec.max_items :]
+    minimum_keep = min(max(int(minimum_items or 0), 0), int(spec.max_items))
+    if minimum_keep and len(selected_rows) < minimum_keep:
+        selected_rule_texts = {
+            _normalize_text_key(row["rule"].text)
+            for row in selected_rows
+            if _normalize_text_key(row["rule"].text)
+        }
+        for row in list(selected_rows):
+            if len(selected_rows) >= minimum_keep:
+                break
+            for rule, bucket_id in row["group"][1:]:
+                if len(selected_rows) >= minimum_keep:
+                    break
+                text_key = _normalize_text_key(rule.text)
+                if text_key and text_key in selected_rule_texts:
+                    continue
+                copied_rule = rule.model_copy(deep=True)
+                selected_rows.append(
+                    {
+                        "rule": copied_rule,
+                        "priority": _rule_candidate_priority(
+                            rule,
+                            bucket_id=bucket_id,
+                            critical_buckets=critical_buckets,
+                            bucket_order=bucket_order,
+                        ),
+                        "group_key": clean_text(rule.rule_id) or text_key,
+                        "group": [(rule, bucket_id)],
+                    }
+                )
+                if text_key:
+                    selected_rule_texts.add(text_key)
+                if merge_events is not None:
+                    merge_events.append(
+                        _build_merge_event(
+                            path=path,
+                            merge_strategy=spec.merge_strategy,
+                            group_key=clean_text(rule.rule_id) or text_key,
+                            group=[(rule, bucket_id)],
+                            resolution="minimum_keep_split",
+                            note=(
+                                "Kept a distinct candidate from a merge group because the path "
+                                f"minimum={minimum_keep} was not yet satisfied."
+                            ),
+                            kept_rule_id=copied_rule.rule_id,
+                            kept_bucket_id=bucket_id,
+                        )
+                    )
+        selected_rows = sorted(selected_rows, key=lambda item: item["priority"])[: spec.max_items]
 
     if rule_lineage_records is not None:
         for row in selected_rows:
@@ -2634,6 +2700,7 @@ def _merge_rule_lists(
     path: str,
     critical_buckets: set[str],
     bucket_order: dict[str, int],
+    minimum_items: int = 0,
     conflict_records: list[StyleBibleAssemblerConflict] | None = None,
     rule_lineage_records: list[StyleBibleRuleLineageEntry] | None = None,
     merge_events: list[StyleBibleMergeEvent] | None = None,
@@ -2651,6 +2718,7 @@ def _merge_rule_lists(
         candidates=candidates,
         critical_buckets=critical_buckets,
         bucket_order=bucket_order,
+        minimum_items=minimum_items,
         conflict_records=conflict_records,
         rule_lineage_records=rule_lineage_records,
         merge_events=merge_events,
@@ -3112,7 +3180,7 @@ def _run_local_reduce(
         temperature=float(config.model.style_bible_temperature or config.model.style_temperature),
         max_output_tokens=int(config.model.style_bible_max_output_tokens or config.model.style_max_output_tokens),
         response_format_mode="json_schema",
-        output_contract_mode="none",
+        output_contract_mode="blueprint",
     )
 
     style_id_hint = clean_text(local_reduce_bundle.get("style_bible_id_hint"))
@@ -3252,6 +3320,7 @@ def _assemble_global_merge(
     critical_bucket_ids: list[str],
     supporting_evidence_soft_cap: int,
     supporting_evidence_hard_cap: int,
+    section_minimums: dict[str, int] | None = None,
 ) -> GlobalMergeAssembly:
     critical_bucket_set = set(critical_bucket_ids)
     bucket_order = {
@@ -3283,6 +3352,7 @@ def _assemble_global_merge(
                 path=path,
                 critical_buckets=critical_bucket_set,
                 bucket_order=bucket_order,
+                minimum_items=int((section_minimums or {}).get(path, 0) or 0),
                 conflict_records=assembler_conflicts,
                 rule_lineage_records=rule_lineage_records,
                 merge_events=merge_events,
@@ -3656,6 +3726,30 @@ def _compute_missing_slots(
             }
         )
     return missing_slots, coverage_trace
+
+
+def _select_count_expansion_slots(
+    path_target: SectionPathTarget,
+    *,
+    slot_coverage_trace: list[dict[str, Any]],
+    deficit: int,
+) -> list[SectionSlotSpec]:
+    if int(deficit or 0) <= 0 or not path_target.slot_specs:
+        return []
+    score_by_slot_id = {
+        clean_text(row.get("slot_id")): float(row.get("best_score", 0.0) or 0.0)
+        for row in slot_coverage_trace
+        if isinstance(row, dict) and clean_text(row.get("slot_id"))
+    }
+    ranked_slots = sorted(
+        path_target.slot_specs,
+        key=lambda slot: (
+            float(score_by_slot_id.get(clean_text(slot.slot_id), 0.0)),
+            clean_text(slot.slot_id),
+        ),
+    )
+    limit = max(min(int(deficit), max(int(path_target.max_new_rows), 1)), 1)
+    return list(ranked_slots[:limit])
 
 
 def _retrieve_reasoning_entries_for_slots(
@@ -4248,7 +4342,7 @@ def _run_section_densify_pass(
             temperature=float(config.model.style_bible_temperature or config.model.style_temperature),
             max_output_tokens=int(config.model.style_bible_max_output_tokens or config.model.style_max_output_tokens),
             response_format_mode="json_schema",
-            output_contract_mode="none",
+            output_contract_mode="blueprint",
         )
         request_metrics, usage_metadata = _build_response_usage_and_request_metrics(
             response,
@@ -4445,7 +4539,15 @@ def _run_section_densify_passes(
                 reports.append(report)
                 continue
 
-            if request.path_target.slot_specs and not missing_slots:
+            count_expansion_slots: list[SectionSlotSpec] = []
+            if request.path_target.slot_specs and not missing_slots and request.deficit > 0:
+                count_expansion_slots = _select_count_expansion_slots(
+                    request.path_target,
+                    slot_coverage_trace=slot_coverage_trace,
+                    deficit=request.deficit,
+                )
+            active_slots = missing_slots or count_expansion_slots
+            if request.path_target.slot_specs and not active_slots:
                 report = {
                     "status": "skipped_slots_full",
                     "target_path": request.path,
@@ -4466,7 +4568,7 @@ def _run_section_densify_passes(
                     reasoning_bundle=current_merge.reasoning_bundle,
                     final_result=current_merge.final_result,
                     request=request,
-                    missing_slots=missing_slots,
+                    missing_slots=active_slots,
                     embedding_client=embedding_client,
                     request_key_prefix=f"section_densify__{_slugify(request.path)}__{round_index + 1:02d}",
                     burned_reasoning_ids=burned_reasoning_ids_by_path.get(request.path, set()),
@@ -4507,7 +4609,7 @@ def _run_section_densify_passes(
                 config,
                 source_bundle=source_bundle,
                 request=request,
-                missing_slots=missing_slots,
+                missing_slots=active_slots,
                 slot_coverage_trace=slot_coverage_trace,
                 existing_rows=existing_rows,
                 densify_bundle=densify_bundle,
@@ -4517,6 +4619,9 @@ def _run_section_densify_passes(
                 output_dir=request_output_dir,
                 round_index=round_index,
             )
+            if count_expansion_slots:
+                report["slot_generation_mode"] = "count_expansion"
+                report["expansion_slot_ids"] = [slot.slot_id for slot in count_expansion_slots]
             reports.append(report)
             if artifact is None:
                 continue
@@ -4541,6 +4646,7 @@ def _run_section_densify_passes(
             critical_bucket_ids=critical_bucket_ids,
             supporting_evidence_soft_cap=int(reduce_config.supporting_evidence_soft_cap),
             supporting_evidence_hard_cap=int(reduce_config.supporting_evidence_hard_cap),
+            section_minimums=section_targets.minimums,
         )
     return densify_artifacts, reports
 
@@ -4794,6 +4900,7 @@ def _run_section_repair_passes(
             critical_bucket_ids=critical_bucket_ids,
             supporting_evidence_soft_cap=int(reduce_config.supporting_evidence_soft_cap),
             supporting_evidence_hard_cap=int(reduce_config.supporting_evidence_hard_cap),
+            section_minimums=section_targets.minimums,
         )
         gaps = _compute_section_gaps(
             merge_assembly.final_result,
@@ -5121,6 +5228,7 @@ def _complete_hierarchical_reduce_from_local_artifacts(
         critical_bucket_ids=critical_bucket_ids,
         supporting_evidence_soft_cap=int(reduce_config.supporting_evidence_soft_cap),
         supporting_evidence_hard_cap=int(reduce_config.supporting_evidence_hard_cap),
+        section_minimums=section_targets.minimums,
     )
     section_densify_artifacts, section_densify_reports = _run_section_densify_passes(
         config,
@@ -5146,6 +5254,7 @@ def _complete_hierarchical_reduce_from_local_artifacts(
         critical_bucket_ids=critical_bucket_ids,
         supporting_evidence_soft_cap=int(reduce_config.supporting_evidence_soft_cap),
         supporting_evidence_hard_cap=int(reduce_config.supporting_evidence_hard_cap),
+        section_minimums=section_targets.minimums,
     )
     final_result = merge_assembly.final_result
     reasoning_bundle = merge_assembly.reasoning_bundle
@@ -5601,4 +5710,3 @@ def reduce_style_bible_from_bucket_memos(
         bucket_memos,
         output_dir,
     )
-

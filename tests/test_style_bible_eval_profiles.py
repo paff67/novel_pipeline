@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from novel_pipeline_stable.style_bible_evaluator import (
+    _build_assembly_loss_diagnostics,
     _evaluate_section_completeness,
     _load_rules,
 )
@@ -116,6 +117,62 @@ class StyleBibleEvalProfilesTest(unittest.TestCase):
 
         self.assertEqual(full_check["status"], "fail")
         self.assertEqual(mini_check["status"], "pass")
+
+    def test_assembly_loss_diagnostics_explain_merge_candidate_loss(self) -> None:
+        config_dir = Path(__file__).resolve().parents[1] / "config"
+        rules = _load_rules(config_dir / "style_bible_eval_rules.toml")
+        payload = {
+            "negative_rules": [
+                {
+                    "rule_id": "kept_negative",
+                    "text": "Do not flatten pressure into vague misery.",
+                }
+            ]
+        }
+        diagnostics = _build_assembly_loss_diagnostics(
+            payload,
+            rules,
+            {
+                "rule_lineage_map": [
+                    {
+                        "surface_path": "negative_rules",
+                        "final_rule_id": "kept_negative",
+                        "source_bucket_ids": ["dark_humor", "resource_pressure"],
+                        "origin_rule_ids": [
+                            "kept_negative",
+                            "resource_negative",
+                            "section_densify__negative_rules__no_vague_angst",
+                        ],
+                    }
+                ],
+                "merge_events": [
+                    {
+                        "surface_path": "negative_rules",
+                        "resolution": "merge_group",
+                        "source_bucket_ids": ["dark_humor", "resource_pressure"],
+                        "origin_rule_ids": [
+                            "kept_negative",
+                            "resource_negative",
+                            "section_densify__negative_rules__no_vague_angst",
+                        ],
+                        "dropped_rule_ids": [
+                            "resource_negative",
+                            "section_densify__negative_rules__no_vague_angst",
+                        ],
+                    }
+                ],
+            },
+        )
+
+        by_path = {row["path"]: row for row in diagnostics["paths"]}
+        negative = by_path["negative_rules"]
+        self.assertTrue(diagnostics["available"])
+        self.assertEqual(negative["final_count"], 1)
+        self.assertEqual(negative["candidate_count"], 3)
+        self.assertEqual(negative["local_candidate_count"], 2)
+        self.assertEqual(negative["densify_candidate_count"], 1)
+        self.assertEqual(negative["merge_drop_count"], 2)
+        self.assertEqual(negative["merge_resolutions"], {"merge_group": 1})
 
 
 if __name__ == "__main__":

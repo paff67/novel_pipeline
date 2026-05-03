@@ -10,7 +10,13 @@ from novel_pipeline_stable.story_nodes import chapter_in_range
 from novel_pipeline_stable.style_window_normalization import normalize_style_window_payload
 
 
-METADATA_JSON_NAMES = {"manifest.json", "failures.json", "run_status.json", "run_manifest.json"}
+METADATA_JSON_NAMES = {
+    "manifest.json",
+    "failures.json",
+    "run_status.json",
+    "run_manifest.json",
+    "merge_report.json",
+}
 
 
 @dataclass(slots=True)
@@ -160,7 +166,7 @@ def load_style_bible_inputs(
 
     style_rows: list[dict[str, Any]] = []
     for path in iter_json_files(style_dir):
-        if _should_skip_json_path(path):
+        if _should_skip_json_path(path) or not path.name.startswith("style_window_"):
             continue
         payload = _read_payload(path)
         if payload is None:

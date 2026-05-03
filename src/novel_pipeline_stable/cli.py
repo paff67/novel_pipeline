@@ -105,6 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
     split.add_argument("--config", required=True)
     split.add_argument("--input-dir", required=True)
     split.add_argument("--output-dir", required=True)
+    split.add_argument("--clear", action="store_true")
 
     probe = subparsers.add_parser("probe-gateway", help="Run connectivity and structured-response probes")
     probe.add_argument("--config", required=True)
@@ -288,7 +289,7 @@ def main() -> None:
 
     if args.command == "split-scenes":
         config = load_project_config(args.config)
-        run_scene_split(config, args.input_dir, args.output_dir)
+        run_scene_split(config, args.input_dir, args.output_dir, clear=args.clear)
         print(f"Scene files written to {Path(args.output_dir).resolve()}")
         return
 
@@ -704,6 +705,8 @@ def main() -> None:
             print(f"Evaluation status: {result.report.get('summary', {}).get('status', '')}")
             print(f"Evaluation score: {result.report.get('summary', {}).get('overall_score', 0)}")
             print(f"Semantic judge model: {result.report.get('semantic_judge_model', '')}")
+            if result.report.get("requested_semantic_judge_model"):
+                print(f"Requested semantic judge model: {result.report.get('requested_semantic_judge_model', '')}")
         return
 
     if args.command == "judge-style-bible":
@@ -781,4 +784,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

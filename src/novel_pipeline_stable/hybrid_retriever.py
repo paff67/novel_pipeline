@@ -491,17 +491,30 @@ class HybridRetriever:
         config: StableProjectConfig | None = None,
         artifacts_dir: str | Path | None = None,
     ) -> None:
-        artifacts_root = ensure_dir(artifacts_dir or (Path(world_graph_dir).resolve() / "_hybrid_retriever"))
-        self.style_retriever = StyleRetriever(
-            style_bible_dir,
-            config=config,
-            artifacts_dir=artifacts_root / "style_lane",
-        )
-        self.world_retriever = WorldGraphRetriever(
-            world_graph_dir,
-            config=config,
-            artifacts_dir=artifacts_root / "world_lane",
-        )
+        self.style_bible_dir = Path(style_bible_dir).resolve()
+        self.world_graph_dir = Path(world_graph_dir).resolve()
+        self.config = config
+        self.artifacts_root = Path(artifacts_dir).resolve() if artifacts_dir else (self.style_bible_dir.parent / "_hybrid_retriever")
+        self._style_retriever: StyleRetriever | None = None
+        self._world_retriever: WorldGraphRetriever | None = None
+
+    def _get_style_retriever(self) -> StyleRetriever:
+        if self._style_retriever is None:
+            self._style_retriever = StyleRetriever(
+                self.style_bible_dir,
+                config=self.config,
+                artifacts_dir=self.artifacts_root / "style_lane",
+            )
+        return self._style_retriever
+
+    def _get_world_retriever(self) -> WorldGraphRetriever:
+        if self._world_retriever is None:
+            self._world_retriever = WorldGraphRetriever(
+                self.world_graph_dir,
+                config=self.config,
+                artifacts_dir=self.artifacts_root / "world_lane",
+            )
+        return self._world_retriever
 
     def retrieve(
         self,
@@ -520,8 +533,17 @@ class HybridRetriever:
                 "route_override": route_decision,
             }
 
-        style_hits = self.style_retriever.search(query, top_k=max(int(top_k), 1))
-        world_hits = self.world_retriever.search(query, top_k=max(int(top_k), 1))
+        style_hits: list[RetrievalHit] = []
+        world_hits: list[RetrievalHit] = []
+        skipped_lanes: list[str] = []
+        if route_decision in {"style", "hybrid"}:
+            style_hits = self._get_style_retriever().search(query, top_k=max(int(top_k), 1))
+        else:
+            skipped_lanes.append("style")
+        if route_decision in {"world", "hybrid"}:
+            world_hits = self._get_world_retriever().search(query, top_k=max(int(top_k), 1))
+        else:
+            skipped_lanes.append("world")
 
         if route_decision == "style":
             merged_hits = list(style_hits)
@@ -531,6 +553,10 @@ class HybridRetriever:
             combined = [*style_hits, *world_hits]
             combined.sort(key=lambda hit: (hit.score, hit.title, hit.hit_id), reverse=True)
             merged_hits = combined[: max(int(top_k), 1)]
+        route_debug = {
+            **route_debug,
+            "skipped_lanes": skipped_lanes,
+        }
 
         return HybridRetrievalResult(
             query=_clean_text(query),

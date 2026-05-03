@@ -166,6 +166,19 @@ function Ensure-MonitorRunning {
   }
 }
 
+function Get-IntOrZero {
+  param([object]$Value)
+
+  if ($null -eq $Value) {
+    return 0
+  }
+  try {
+    return [int]$Value
+  } catch {
+    return 0
+  }
+}
+
 function Test-CanonNeedsBuild {
   param(
     [object]$FactStatus,
@@ -180,6 +193,18 @@ function Test-CanonNeedsBuild {
     return $false
   }
   if ([string]$StyleStatus.status -ne 'completed') {
+    return $false
+  }
+  if ((Get-IntOrZero -Value $FactStatus.outstanding_failures) -ne 0) {
+    return $false
+  }
+  if ((Get-IntOrZero -Value $StyleStatus.outstanding_failures) -ne 0) {
+    return $false
+  }
+  if ((Get-IntOrZero -Value $FactStatus.pending_items) -ne 0) {
+    return $false
+  }
+  if ((Get-IntOrZero -Value $StyleStatus.pending_items) -ne 0) {
     return $false
   }
   if ($CanonStatus -and [string]$CanonStatus.status -eq 'running') {

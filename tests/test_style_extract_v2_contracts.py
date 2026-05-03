@@ -4,8 +4,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from novel_pipeline_stable.api_clients import StableOpenAICompatibleStructuredClient
+import novel_pipeline_stable.pipelines as pipelines
 from novel_pipeline_stable.config import (
     ModelConfig,
     PathConfig,
@@ -29,6 +31,7 @@ from novel_pipeline_stable.style_bible_builder import (
 )
 from novel_pipeline_stable.style_bible_inputs import StyleBibleInputBundle, load_style_bible_inputs
 from novel_pipeline_stable.style_bible_router import route_style_bible_inputs
+from novel_pipeline_stable.style_window_normalization import normalize_style_window_payload
 
 
 def _make_config(project_root: Path) -> StableProjectConfig:
@@ -277,6 +280,71 @@ class StyleExtractV2ContractsTest(unittest.TestCase):
         self.assertEqual(response_format["type"], "json_schema")
         self.assertEqual(response_format["json_schema"]["name"], "StyleWindowSignalResult")
         self.assertEqual(system_instruction, "system prompt body")
+
+    def test_extract_style_uses_strict_schema_for_style_signal_contract(self) -> None:
+        class FakeStyleClient:
+            calls: list[dict] = []
+
+            def __init__(self, *_: object, **__: object) -> None:
+                pass
+
+            def generate_structured(self, **kwargs: object) -> SimpleNamespace:
+                self.__class__.calls.append(dict(kwargs))
+                return SimpleNamespace(
+                    parsed=StyleWindowSignalResult.model_validate(_sample_style_row()),
+                    model_name=str(kwargs.get("model_name", "")),
+                    usage_metadata={},
+                    request_metrics={"total_elapsed_seconds": 0.01, "response_chars": 256},
+                )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            prompt_dir = root / "prompts"
+            input_dir = root / "chapters"
+            output_dir = root / "style"
+            prompt_dir.mkdir()
+            input_dir.mkdir()
+            (prompt_dir / "style_extraction.md").write_text("Extract style JSON.", encoding="utf-8")
+            (input_dir / "chapter_0001.txt").write_text("Chapter 1\nA reward arrives. A fee follows.", encoding="utf-8")
+            (input_dir / "chapter_0002.txt").write_text("Chapter 2\nA notice interrupts the lesson.", encoding="utf-8")
+
+            config = _make_config(root)
+            config.base.model.response_format = "json_object"
+            original_client = pipelines.StableOpenAICompatibleStructuredClient
+            try:
+                pipelines.StableOpenAICompatibleStructuredClient = FakeStyleClient  # type: ignore[assignment]
+                pipelines.extract_style(config, input_dir, output_dir, resume=False)
+            finally:
+                pipelines.StableOpenAICompatibleStructuredClient = original_client
+
+            self.assertEqual(FakeStyleClient.calls[0]["response_format_mode"], "json_schema")
+            self.assertEqual(FakeStyleClient.calls[0]["output_contract_mode"], "blueprint")
+            self.assertTrue((output_dir / "style_window_0001_0002.json").exists())
+
+    def test_style_window_signal_result_tolerates_recoverable_model_omissions(self) -> None:
+        payload = _sample_style_row()
+        payload.pop("source_chapter_titles")
+        payload["scalar_contracts"] = {
+            "perspective": "mixed",
+            "distance": "",
+            "temporality": "",
+            "inner_monologue_mode": "",
+        }
+
+        parsed = StyleWindowSignalResult.model_validate(payload)
+
+        self.assertEqual(parsed.source_chapter_titles, [])
+        self.assertEqual(parsed.scalar_contracts.perspective, "multi_pov")
+        self.assertEqual(parsed.scalar_contracts.distance, "unspecified")
+
+    def test_style_window_normalization_ignores_runtime_metadata(self) -> None:
+        payload = _sample_style_row()
+        payload["artifact_fingerprint"] = {"sha256": "runtime-only"}
+
+        normalized = normalize_style_window_payload(payload)
+
+        self.assertEqual(normalized["window_id"], payload["window_id"])
+        self.assertNotIn("artifact_fingerprint", normalized)
 
     def test_build_style_payload_emits_source_text_and_scene_locator(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -625,4 +693,3 @@ class StyleExtractV2ContractsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

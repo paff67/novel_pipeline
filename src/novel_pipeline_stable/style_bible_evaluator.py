@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -170,6 +171,79 @@ def _evaluate_section_completeness(style_bible_payload: dict[str, Any], rules: S
     }
 
 
+def _build_assembly_loss_diagnostics(
+    style_bible_payload: dict[str, Any],
+    rules: StyleBibleEvalRules,
+    reduce_trace_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    trace = reduce_trace_payload if isinstance(reduce_trace_payload, dict) else {}
+    lineage_rows = trace.get("rule_lineage_map", [])
+    merge_events = trace.get("merge_events", [])
+    if not isinstance(lineage_rows, list):
+        lineage_rows = []
+    if not isinstance(merge_events, list):
+        merge_events = []
+
+    paths: list[dict[str, Any]] = []
+    for path in rules.minimums:
+        origin_rule_ids: set[str] = set()
+        dropped_rule_ids: set[str] = set()
+        source_bucket_ids: set[str] = set()
+        resolution_counts: Counter[str] = Counter()
+        lineage_count = 0
+        for row in lineage_rows:
+            if not isinstance(row, dict) or _clean_text(row.get("surface_path")) != path:
+                continue
+            lineage_count += 1
+            origin_rule_ids.update(_clean_text(item) for item in row.get("origin_rule_ids", []) if _clean_text(item))
+            source_bucket_ids.update(_clean_text(item) for item in row.get("source_bucket_ids", []) if _clean_text(item))
+        for row in merge_events:
+            if not isinstance(row, dict) or _clean_text(row.get("surface_path")) != path:
+                continue
+            resolution = _clean_text(row.get("resolution")) or "unknown"
+            resolution_counts[resolution] += 1
+            origin_rule_ids.update(_clean_text(item) for item in row.get("origin_rule_ids", []) if _clean_text(item))
+            dropped_rule_ids.update(_clean_text(item) for item in row.get("dropped_rule_ids", []) if _clean_text(item))
+            source_bucket_ids.update(_clean_text(item) for item in row.get("source_bucket_ids", []) if _clean_text(item))
+
+        densify_candidate_ids = {
+            rule_id for rule_id in origin_rule_ids if rule_id.startswith("section_densify__")
+        }
+        final_count = _count_value_items(_get_nested(style_bible_payload, path))
+        candidate_count = len(origin_rule_ids)
+        local_candidate_count = max(candidate_count - len(densify_candidate_ids), 0)
+        paths.append(
+            {
+                "path": path,
+                "minimum": int(rules.minimums[path]),
+                "final_count": final_count,
+                "lineage_final_count": lineage_count,
+                "candidate_count": candidate_count,
+                "local_candidate_count": local_candidate_count,
+                "densify_candidate_count": len(densify_candidate_ids),
+                "merge_drop_count": len(dropped_rule_ids),
+                "loss_count": max(candidate_count - final_count, 0),
+                "source_bucket_count": len(source_bucket_ids),
+                "merge_resolutions": dict(sorted(resolution_counts.items())),
+            }
+        )
+
+    top_loss_paths = sorted(
+        paths,
+        key=lambda row: (
+            -int(row["loss_count"]),
+            -int(row["candidate_count"]),
+            row["path"],
+        ),
+    )[:8]
+    return {
+        "available": bool(lineage_rows or merge_events),
+        "path_count": len(paths),
+        "paths": paths,
+        "top_loss_paths": top_loss_paths,
+    }
+
+
 def _evaluate_schema_validity(style_bible_payload: dict[str, Any]) -> tuple[dict[str, Any], StyleBibleResultV2 | None]:
     try:
         parsed = StyleBibleResultV2.model_validate(style_bible_payload)
@@ -218,6 +292,7 @@ def _build_markdown_report(report: dict[str, Any]) -> str:
         f"- style_id: {report.get('style_id', '')}",
         f"- scope: {report.get('scope', '')}",
         f"- semantic_judge_model: {report.get('semantic_judge_model', '')}",
+        f"- requested_semantic_judge_model: {report.get('requested_semantic_judge_model', '')}",
         f"- overall_status: {summary.get('status', '')}",
         f"- overall_score: {summary.get('overall_score', 0.0)}",
         f"- semantic_average_specificity: {semantic_summary.get('average_specificity', 0.0)}",
@@ -232,6 +307,21 @@ def _build_markdown_report(report: dict[str, Any]) -> str:
             f"- `{check.get('check_id', '')}`: {check.get('status', '')} "
             f"(score={check.get('score', 0.0)}/{check.get('max_score', 0.0)})"
         )
+    section_details = {}
+    for check in checks:
+        if check.get("check_id") == "section_completeness":
+            section_details = check.get("details", {}) or {}
+            break
+    assembly_loss = section_details.get("assembly_loss") or {}
+    top_loss_paths = assembly_loss.get("top_loss_paths", []) if isinstance(assembly_loss, dict) else []
+    if top_loss_paths:
+        lines.extend(["", "## Assembly Loss", ""])
+        for row in top_loss_paths:
+            lines.append(
+                f"- `{row.get('path', '')}`: final={row.get('final_count', 0)}, "
+                f"candidates={row.get('candidate_count', 0)}, drops={row.get('merge_drop_count', 0)}, "
+                f"resolutions={row.get('merge_resolutions', {})}"
+            )
     weak_rules = semantic_summary.get("weak_rules", [])
     lines.extend(["", "## Weak Rules", ""])
     if not weak_rules:
@@ -288,6 +378,12 @@ def evaluate_style_bible(
             "recommendation": "",
         }
     )
+    if parsed is not None and isinstance(reduce_trace_payload, dict):
+        section_check.setdefault("details", {})["assembly_loss"] = _build_assembly_loss_diagnostics(
+            style_bible_payload,
+            rules,
+            reduce_trace_payload,
+        )
     semantic_artifacts = (
         build_style_bible_semantic_report(
             style_bible_payload,
@@ -337,7 +433,9 @@ def evaluate_style_bible(
         "rules_config": str(rules.rules_path),
         "style_id": _clean_text(style_bible_payload.get("style_id")),
         "scope": _clean_text(style_bible_payload.get("scope")),
-        "semantic_judge_model": _clean_text(semantic_judge_model) or "offline_semantic_judge",
+        "semantic_judge_model": "offline_semantic_rule_engine",
+        "requested_semantic_judge_model": _clean_text(semantic_judge_model),
+        "decision_source": "offline_semantic_rule_engine",
         "style_bible_schema_version": (
             _clean_text(build_run_manifest.get("style_bible_schema_version")) if isinstance(build_run_manifest, dict) else ""
         ) or STYLE_BIBLE_SCHEMA_VERSION,
@@ -443,6 +541,7 @@ def run_style_bible_evaluation(
                     "status": result.report.get("summary", {}).get("status", ""),
                     "overall_score": result.report.get("summary", {}).get("overall_score", 0.0),
                     "semantic_judge_model": result.report.get("semantic_judge_model", ""),
+                    "requested_semantic_judge_model": result.report.get("requested_semantic_judge_model", ""),
                     "evaluation_manifest_file": result.evaluation_manifest_path.name if result.evaluation_manifest_path else "",
                 }
             ],
@@ -486,6 +585,7 @@ __all__ = [
     "REPORT_MD_FILE",
     "StyleBibleEvaluationResult",
     "StyleBibleEvalRules",
+    "_build_assembly_loss_diagnostics",
     "_evaluate_section_completeness",
     "_load_rules",
     "evaluate_style_bible",

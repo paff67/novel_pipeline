@@ -1410,6 +1410,8 @@ def _run_batch_memo_task(
             user_payload=task.user_payload,
             temperature=float(config.model.style_bible_temperature or config.model.style_temperature),
             max_output_tokens=int(config.model.style_bible_max_output_tokens or config.model.style_max_output_tokens),
+            response_format_mode="json_schema",
+            output_contract_mode="blueprint",
         )
         sanitized, sanitization_audit = _sanitize_batch_memo(response.parsed, task=task)
         merged_usage_metadata = StableOpenAICompatibleStructuredClient._merge_usage_metadata(
@@ -1832,4 +1834,3 @@ def build_style_bible_bucket_memos(
         memoed_chapter_ids=memoed_chapter_ids,
         memoed_refs=memoed_refs,
     )
-
