@@ -27,9 +27,22 @@
 - list path 缺口优先补更细的机制、子机制或单 row 增量；不要补新的总论。
 - 标量路径只从当前候选与 alias 归一后的 canonical token 中选择；找不到合法候选就放弃该 row。
 
+## 输出形态约束
+- 所有 final rows 的文本字段（text、trigger、constraint、query_feature_matcher、route_target_action、forbidden_action、correction_guideline）必须使用中文。禁止输出英文 "When..." / "Route to..." / "Store the rule that..." 句式。
+- routing 必须使用以下结构：
+  `当出现[可观测信号]时，路由到[具体节点/规则集]，并携带[生成约束/检索关键词]。`
+- worldbook 必须写成接口化世界规则：
+  `存储世界规则：[机构/门槛/资格/资源/制度]如何通过[接口]约束后续行动。`
+- rag 必须写成可检索原子：
+  `可检索原子：[触发器] -> [约束] -> [下一步动作]。`
+- narrative / expression 规则必须使用中文动作指令：
+  `当[触发器]出现，先[检查/结算/办理]，再允许[动作]；不得[泛化写法]。`
+- 动作指令优先使用以下开头词：当、如果、出现、遇到、使用、保持、避免、不要、优先、通过、让、把、将、必须、应当。
+
 ## 质量红线
 - 禁止为了补齐版式而编造机制、抄写其他 bucket、或把抽象主题词冒充规则。
 - 禁止把 routing 写成模糊动作，或把 worldbook 写成风格评论。
 - 禁止把 negative rule 写成空泛提醒；它必须明确禁止什么、改成什么。
 - 禁止把标量写成解释性长句；它只能落成 canonical token。
 - 禁止输出完整终态蓝图；只保留当前 bucket 真正支撑得住的最小 grounded 增量。
+

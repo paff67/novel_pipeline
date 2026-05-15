@@ -1,4 +1,4 @@
-﻿[repair]
+[repair]
 section_rules_config = "style_bible_eval_rules.toml"
 max_rounds = 2
 max_buckets_per_round = 8
@@ -45,6 +45,9 @@ preferred_paths = [
   "voice_contract.register_mix",
   "character_arc_rules",
   "negative_rules",
+  "worldbook_binding.routing_hints",
+  "worldbook_binding.rag_worthy",
+  "worldbook_binding.worldbook_worthy",
 ]
 scalar_paths = [
   "narrative_system.distance",
@@ -111,6 +114,7 @@ preferred_paths = [
   "voice_contract.negative_pitfalls",
   "worldbook_binding.worldbook_worthy",
   "worldbook_binding.routing_hints",
+  "worldbook_binding.rag_worthy",
   "negative_rules",
 ]
 scalar_paths = [
@@ -131,6 +135,8 @@ preferred_paths = [
   "voice_contract.register_mix",
   "voice_contract.negative_pitfalls",
   "worldbook_binding.routing_hints",
+  "worldbook_binding.rag_worthy",
+  "worldbook_binding.worldbook_worthy",
   "negative_rules",
 ]
 scalar_paths = [
@@ -1000,6 +1006,7 @@ bucket_allowlist = [
   "contract_sales",
   "commercialized_conflict",
   "dark_humor",
+  "resource_pressure",
 ]
 downstream_shape = "Emit concrete matcher -> route_target_action pairs that can drive downstream routing."
 dedupe_threshold = 0.92
@@ -1054,6 +1061,7 @@ bucket_allowlist = [
   "body_assetization",
   "asset_repricing",
   "commercialized_conflict",
+  "dark_humor",
 ]
 downstream_shape = "Emit retrievable rules that can be recalled at generation time."
 dedupe_threshold = 0.92
@@ -1108,6 +1116,7 @@ bucket_allowlist = [
   "asset_repricing",
   "contract_sales",
   "resource_pressure",
+  "dark_humor",
 ]
 downstream_shape = "Emit stable worldbook facts or rules that should survive beyond one scene."
 dedupe_threshold = 0.92

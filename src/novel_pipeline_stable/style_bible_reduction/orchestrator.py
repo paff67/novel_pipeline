@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import math
 import re
@@ -2218,13 +2218,70 @@ def _rule_merge_keys(rule: StyleBibleRuleBase, *, path: str) -> list[str]:
     return keys or [f"rule_id:{clean_text(rule.rule_id) or id(rule)}"]
 
 
+_JUDGE_SHAPE_TRIGGER_CUES = ("当", "如果", "出现", "遇到", "凡是", "涉及")
+_JUDGE_SHAPE_ACTION_CUES = ("使用", "保持", "避免", "不要", "优先", "通过", "让", "把", "将", "必须", "应当", "先", "再", "需要", "应")
+_JUDGE_SHAPE_ROUTING_CUES = ("路由到", "路由至", "进入", "归到")
+_JUDGE_SHAPE_WORLDBOOK_ANCHORS = ("机构", "规则", "门槛", "资格", "资源", "制度", "节点", "世界书", "合同", "检查点", "收费", "票据")
+_JUDGE_SHAPE_ENGLISH_PATTERN = re.compile(r"^(When |If |Route to |Store the |Must |Do not )", re.IGNORECASE)
+_JUDGE_SHAPE_KEYWORD_STUFF_SPLIT = re.compile(r"[、,，/|；;：:\s]+")
+
+
+def _judge_shape_score(rule: StyleBibleRuleBase, *, path: str = "") -> float:
+    """Local scoring for Judge V2 shape friendliness. Returns 0.0-1.0.
+
+    Prefers rules with Chinese trigger/action cues, proper routing
+    structure, worldbook anchors, and evidence refs. Penalises
+    English template sentences and keyword stuffing.
+    """
+    text = clean_text(getattr(rule, "text", ""))
+    trigger = clean_text(getattr(rule, "trigger", ""))
+    constraint = clean_text(getattr(rule, "constraint", ""))
+    combined = f"{text} {trigger} {constraint}"
+
+    score = 0.5  # baseline
+
+    # Positive: Chinese trigger cues in leading position
+    if any(cue in combined[:10] for cue in _JUDGE_SHAPE_TRIGGER_CUES):
+        score += 0.15
+    # Positive: Chinese action cues anywhere
+    if any(cue in combined for cue in _JUDGE_SHAPE_ACTION_CUES):
+        score += 0.1
+    # Positive: routing-specific patterns
+    if "routing" in path:
+        matcher = clean_text(getattr(rule, "query_feature_matcher", ""))
+        action = clean_text(getattr(rule, "route_target_action", ""))
+        if any(cue in action for cue in _JUDGE_SHAPE_ROUTING_CUES):
+            score += 0.15
+        if any(cue in matcher for cue in _JUDGE_SHAPE_TRIGGER_CUES):
+            score += 0.1
+    # Positive: worldbook/rag anchors
+    if "worldbook" in path or "rag" in path:
+        if any(anchor in combined for anchor in _JUDGE_SHAPE_WORLDBOOK_ANCHORS):
+            score += 0.15
+    # Positive: evidence refs present
+    refs = getattr(rule, "evidence_refs", [])
+    if refs and any(clean_text(r) for r in refs):
+        score += 0.05
+
+    # Negative: English template sentence
+    if _JUDGE_SHAPE_ENGLISH_PATTERN.search(text):
+        score -= 0.3
+    # Negative: keyword stuffing (≥4 comma-separated chunks, no action cue)
+    chunks = [p for p in _JUDGE_SHAPE_KEYWORD_STUFF_SPLIT.split(text) if clean_text(p)]
+    if len(chunks) >= 4 and not any(cue in text for cue in _JUDGE_SHAPE_ACTION_CUES):
+        score -= 0.15
+
+    return max(0.0, min(1.0, round(score, 4)))
+
+
 def _rule_candidate_priority(
     rule: StyleBibleRuleBase,
     *,
     bucket_id: str,
     critical_buckets: set[str],
     bucket_order: dict[str, int],
-) -> tuple[int, int, int, int, str, str]:
+    path: str = "",
+) -> tuple[int, int, int, int, int, str, str]:
     structured_score = sum(
         1
         for value in (
@@ -2237,10 +2294,13 @@ def _rule_candidate_priority(
         )
         if clean_text(value)
     )
+    # Quantise judge_shape_score to a discrete bucket (0-10) for stable sorting.
+    judge_shape = int(_judge_shape_score(rule, path=path) * 10)
     return (
         -int(clean_text(bucket_id) in critical_buckets),
         -len(_unique_strings(rule.evidence_refs)),
         -structured_score,
+        -judge_shape,
         int(bucket_order.get(clean_text(bucket_id), 10**6)),
         clean_text(rule.rule_id),
         _normalize_text_key(rule.text),
@@ -2275,6 +2335,7 @@ def _sort_rule_candidates(
     *,
     critical_buckets: set[str],
     bucket_order: dict[str, int],
+    path: str = "",
 ) -> list[tuple[StyleBibleRuleBase, str]]:
     return sorted(
         candidates,
@@ -2283,6 +2344,7 @@ def _sort_rule_candidates(
             bucket_id=item[1],
             critical_buckets=critical_buckets,
             bucket_order=bucket_order,
+            path=path,
         ),
     )
 
@@ -2456,6 +2518,7 @@ def _assemble_path_value_from_candidates(
         candidates,
         critical_buckets=critical_buckets,
         bucket_order=bucket_order,
+        path=path,
     )
     if spec.cardinality == "scalar":
         if not ordered_candidates:
@@ -2578,6 +2641,7 @@ def _assemble_path_value_from_candidates(
             group,
             critical_buckets=critical_buckets,
             bucket_order=bucket_order,
+            path=path,
         )
         merged_rule = _merge_group_rule_item(ordered_group)
         priority = _rule_candidate_priority(
@@ -2585,6 +2649,7 @@ def _assemble_path_value_from_candidates(
             bucket_id=ordered_group[0][1],
             critical_buckets=critical_buckets,
             bucket_order=bucket_order,
+            path=path,
         )
         merged_rows.append(
             {

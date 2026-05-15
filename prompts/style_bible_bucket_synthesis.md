@@ -24,6 +24,12 @@
 - 如果你提炼的规则命中了负例库中的特征，必须立即抛弃该规则。
 - 确保你输出的 `execution_action` 完全避开这些已知的坏模式。
 
+## 语言约束
+- `trigger_condition` 和 `execution_action` 必须使用中文。禁止英文 "When..." / "Must..." / "Do not..." 句式。
+- trigger_condition 格式：`当[信号/条件]出现时`
+- execution_action 格式：`必须[动作]，不得[禁止项]`
+- `_scratchpad` 中的 `structural_analysis` 可使用中文或英文，但 `rule_candidates` 的最终字段必须全部中文。
+
 ## 数据完整性红线
 1. **只允许输出符合指定格式的纯 JSON 对象**，绝对禁止任何 Markdown 代码块包装（不要使用 ```json）、解释性文字或前后缀。
 2. 所有的 `_ref` 字段与 `evidence_refs` 项，必须原封不动地复制输入 XML 中已存在的合法 `ref` 属性值，绝对禁止捏造不存在的 ID，也绝对禁止填写自然语言证据描述。
