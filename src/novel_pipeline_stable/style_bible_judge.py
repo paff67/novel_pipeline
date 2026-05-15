@@ -9,7 +9,7 @@ from typing import Any
 from novel_pipeline_stable.io_utils import ensure_dir, read_json, write_json, write_jsonl, write_markdown, write_text
 from novel_pipeline_stable.models import StyleBibleReasoningBundle, StyleBibleResult, style_bible_payload_to_flat
 from novel_pipeline_stable.monitoring import RunTracker, utc_timestamp
-from novel_pipeline_stable.style_bible_contracts import REDUCE_TRACE_FILE
+from novel_pipeline_stable.style_bible_contracts import JUDGE_FLAT_FILE, REDUCE_TRACE_FILE
 from novel_pipeline_stable.style_eval_contract import (
     EVALUATION_MANIFEST_FILE,
     RUN_MANIFEST_FILE,
@@ -461,6 +461,22 @@ def _try_load_eval_report(eval_dir: Path | None) -> tuple[Path | None, dict[str,
         manifest_path if manifest_path.exists() else None,
         manifest_payload if isinstance(manifest_payload, dict) else None,
     )
+
+
+def _select_judge_projection_payload(
+    *,
+    style_bible_payload: dict[str, Any],
+    judge_flat_payload: dict[str, Any] | None,
+    export_flat_payload: dict[str, Any] | None,
+) -> tuple[dict[str, Any], str]:
+    if judge_flat_payload:
+        return judge_flat_payload, JUDGE_FLAT_FILE
+    if export_flat_payload:
+        return export_flat_payload, EXPORT_FLAT_FILE
+    normalized_payload = style_bible_payload_to_flat(style_bible_payload)
+    if normalized_payload:
+        return normalized_payload, "style_bible_final_flattened"
+    return style_bible_payload, STYLE_BIBLE_FILE
 
 
 def _infer_node_id(
@@ -2106,6 +2122,7 @@ def run_style_bible_judge(
     style_bible_path = source_dir / STYLE_BIBLE_FILE
     reasoning_path = source_dir / REASONING_FILE
     reduce_trace_path = source_dir / REDUCE_TRACE_FILE
+    judge_flat_path = source_dir / JUDGE_FLAT_FILE
     export_flat_path = source_dir / EXPORT_FLAT_FILE
     source_bundle_path = source_dir / SOURCE_BUNDLE_FILE
     if not style_bible_path.exists():
@@ -2129,6 +2146,7 @@ def run_style_bible_judge(
         style_bible_payload = read_json(style_bible_path)
         reasoning_payload = read_json(reasoning_path) if reasoning_path.exists() else {}
         reduce_trace_payload = read_json(reduce_trace_path) if reduce_trace_path.exists() else {}
+        judge_flat_payload = read_json(judge_flat_path) if judge_flat_path.exists() else {}
         export_flat_payload = read_json(export_flat_path) if export_flat_path.exists() else {}
         source_bundle = read_json(source_bundle_path)
         if not isinstance(style_bible_payload, dict):
@@ -2137,13 +2155,17 @@ def run_style_bible_judge(
             raise ValueError(f"Reasoning payload must be an object: {reasoning_path}")
         if reduce_trace_payload and not isinstance(reduce_trace_payload, dict):
             raise ValueError(f"Reduce trace payload must be an object: {reduce_trace_path}")
+        if judge_flat_payload and not isinstance(judge_flat_payload, dict):
+            raise ValueError(f"Judge flat payload must be an object: {judge_flat_path}")
         if export_flat_payload and not isinstance(export_flat_payload, dict):
             raise ValueError(f"Flat export payload must be an object: {export_flat_path}")
         if not isinstance(source_bundle, dict):
             raise ValueError(f"Source bundle payload must be an object: {source_bundle_path}")
-        normalized_payload = export_flat_payload if export_flat_payload else style_bible_payload_to_flat(style_bible_payload)
-        if not normalized_payload:
-            normalized_payload = style_bible_payload
+        normalized_payload, projection_source = _select_judge_projection_payload(
+            style_bible_payload=style_bible_payload,
+            judge_flat_payload=judge_flat_payload,
+            export_flat_payload=export_flat_payload,
+        )
         StyleBibleResult.model_validate(normalized_payload)
         try:
             reasoning_bundle = StyleBibleReasoningBundle.model_validate(reasoning_payload) if reasoning_payload else StyleBibleReasoningBundle()
@@ -2351,10 +2373,12 @@ def run_style_bible_judge(
             "summary": summary,
             "rule_evaluation_summary": eval_summary,
             "reasoning_bundle_error": reasoning_bundle_error,
+            "style_bible_projection_source": projection_source,
             "feature_flags": runtime_flags.as_dict(),
             "case_results": case_results,
             "hashes": {
                 "style_bible_sha256": sha256_payload(style_bible_payload),
+                "judge_flat_sha256": sha256_payload(judge_flat_payload) if judge_flat_payload else "",
                 "source_bundle_sha256": sha256_payload(source_bundle),
                 "gold_set_sha256": gold_set_hash,
                 "judge_rules_sha256": file_sha256(judge_rules.rules_path),
@@ -2363,6 +2387,7 @@ def run_style_bible_judge(
                 "style_bible_file": str(style_bible_path),
                 "reasoning_file": str(reasoning_path) if reasoning_path.exists() else "",
                 "reduce_trace_file": str(reduce_trace_path) if reduce_trace_path.exists() else "",
+                "judge_flat_file": str(judge_flat_path) if judge_flat_path.exists() else "",
                 "export_flat_file": str(export_flat_path) if export_flat_path.exists() else "",
                 "source_bundle_file": str(source_bundle_path),
                 "run_manifest_file": str(run_manifest_path) if run_manifest_path else "",

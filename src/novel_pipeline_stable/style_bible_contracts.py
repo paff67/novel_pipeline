@@ -13,6 +13,7 @@ BUCKET_MEMO_DIR = "bucket_memos"
 REDUCE_TRACE_FILE = "style_bible_reduce_trace.json"
 REASONING_FILE = "style_bible_reasoning.json"
 EXPORT_FLAT_FILE = "style_bible_export_flat.json"
+JUDGE_FLAT_FILE = "judge_flat.json"
 
 STYLE_BIBLE_SAMPLING_REPORT_VERSION = "style-bible-sampling-report-v2"
 STYLE_BIBLE_ROUTED_INDEX_VERSION = "style-bible-routed-index-v2"

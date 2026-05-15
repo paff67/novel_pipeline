@@ -47,7 +47,8 @@ from novel_pipeline_stable.style_bible_surface_specs import (
     scalar_value_aliases_for_path,
     scalar_value_lookup_rows,
 )
-from novel_pipeline_stable.style_bible_contracts import EXPORT_FLAT_FILE, REASONING_FILE, REDUCE_TRACE_FILE
+from novel_pipeline_stable.style_bible_contracts import EXPORT_FLAT_FILE, JUDGE_FLAT_FILE, REASONING_FILE, REDUCE_TRACE_FILE
+from novel_pipeline_stable.style_bible_judge_export import build_judge_flat
 from novel_pipeline_stable.style_bible_inputs import clean_text
 from novel_pipeline_stable.style_bible_prompt_assembler import (
     assemble_local_reducer_prompt,
@@ -5348,6 +5349,7 @@ def _complete_hierarchical_reduce_from_local_artifacts(
     reasoning_record = reasoning_bundle.model_dump(mode="json")
     record = final_result.model_dump(mode="json", by_alias=True)
     export_flat_record = _build_export_flat(record)
+    judge_flat_record = build_judge_flat(record, source_bundle, reasoning_record)
     reduce_trace = _build_global_reduce_trace(
         reasoning_bundle,
         grounding_ref_pool,
@@ -5374,6 +5376,7 @@ def _complete_hierarchical_reduce_from_local_artifacts(
     output_file = output_path / "style_bible_final.json"
     reasoning_path = output_path / REASONING_FILE
     export_flat_path = output_path / EXPORT_FLAT_FILE
+    judge_flat_path = output_path / JUDGE_FLAT_FILE
     reduce_trace_path = output_path / REDUCE_TRACE_FILE
     source_bundle_path = output_path / "style_bible_source_bundle.json"
     bucket_memo_dir = ensure_dir(output_path / "bucket_memos")
@@ -5383,6 +5386,7 @@ def _complete_hierarchical_reduce_from_local_artifacts(
     write_json(output_file, record)
     write_json(reasoning_path, reasoning_record)
     write_json(export_flat_path, export_flat_record)
+    write_json(judge_flat_path, judge_flat_record)
     write_json(reduce_trace_path, reduce_trace)
 
     request_metrics, usage_metadata = _aggregate_local_reduce_metrics(
